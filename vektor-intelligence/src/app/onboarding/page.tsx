@@ -52,13 +52,23 @@ const SUBJECTS = [
 const LEVELS = ["Beginner", "Elementary", "Intermediate", "Advanced", "Expert"];
 
 const GOALS = [
-  { id: "school",      label: "School exams",         icon: "◈", desc: "Board exams and school curriculum"      },
-  { id: "jee_neet",   label: "JEE / NEET prep",       icon: "◎", desc: "Competitive entrance exam preparation"  },
-  { id: "university", label: "University coursework",  icon: "◇", desc: "Undergraduate or postgraduate study"    },
-  { id: "research",   label: "Research",               icon: "◉", desc: "Academic or professional research"      },
-  { id: "curiosity",  label: "Personal curiosity",     icon: "○", desc: "Learning for the love of it"            },
+  { id: "school",      label: "School exams",        icon: "◈", desc: "Board exams and school curriculum"     },
+  { id: "jee_neet",   label: "JEE / NEET prep",      icon: "◎", desc: "Competitive entrance exam preparation" },
+  { id: "university", label: "University coursework", icon: "◇", desc: "Undergraduate or postgraduate study"   },
+  { id: "research",   label: "Research",              icon: "◉", desc: "Academic or professional research"     },
+  { id: "curiosity",  label: "Personal curiosity",    icon: "○", desc: "Learning for the love of it"           },
 ];
 
+// ── Role → dashboard path ─────────────────────────────────────
+function getDashboardPath(role?: string): string {
+  switch (role) {
+    case "teacher":    return "/teacher";
+    case "researcher": return "/researcher";
+    case "admin":      return "/dashboard/admin";
+    default:           return "/dashboard"; // student
+  }
+}
+ 
 // ── Component ─────────────────────────────────────────────────
 export default function OnboardingPage() {
   const router = useRouter();
@@ -114,6 +124,8 @@ export default function OnboardingPage() {
 
   // ── Step 4 — Welcome ─────────────────────────────────────────
   if (step === 4) {
+    const dashboardPath = getDashboardPath(user?.role);
+
     return (
       <div
         className="min-h-screen flex flex-col items-center justify-center text-center px-6"
@@ -138,7 +150,6 @@ export default function OnboardingPage() {
             transform: welcomeVisible ? "scale(1)" : "scale(0.7)",
           }}
         >
-          {/* Outer ring pulse */}
           <div
             className="absolute inset-0"
             style={{
@@ -149,7 +160,6 @@ export default function OnboardingPage() {
               animation: "orbPulse 2.5s ease-in-out infinite",
             }}
           />
-          {/* Inner container */}
           <div
             className="relative flex items-center justify-center"
             style={{
@@ -198,7 +208,8 @@ export default function OnboardingPage() {
             className="text-sm mb-12 mx-auto"
             style={{ color: "#6B6A80", maxWidth: "440px", lineHeight: 1.9 }}
           >
-            Every question you ask will map your understanding. Every gap becomes a direction. Every session brings you closer to mastery.
+            Every question you ask will map your understanding. Every gap becomes
+            a direction. Every session brings you closer to mastery.
           </p>
 
           {/* Selected subjects preview */}
@@ -223,8 +234,12 @@ export default function OnboardingPage() {
             })}
           </div>
 
+          {/* ── FIX: role-aware navigation ── */}
           <button
-            onClick={() => router.push("/dashboard")}
+            onClick={() => {
+              router.refresh();
+              router.push(dashboardPath);
+            }}
             className="px-12 py-4 text-sm font-black tracking-widest transition-all duration-200"
             style={{
               backgroundColor: "#C8FF00",
@@ -269,7 +284,6 @@ export default function OnboardingPage() {
         className="relative z-10 flex items-center justify-between px-8 py-5"
         style={{ borderBottom: "1px solid #1E1E36" }}
       >
-        {/* Logo */}
         <div className="flex items-center gap-3">
           <div
             className="flex items-center justify-center"
@@ -300,8 +314,8 @@ export default function OnboardingPage() {
                 width: s === step ? 32 : 8,
                 height: 8,
                 backgroundColor:
-                  s === step   ? "#C8FF00" :
-                  s < step     ? "#C8FF0050" : "#1E1E36",
+                  s === step ? "#C8FF00" :
+                  s < step   ? "#C8FF0050" : "#1E1E36",
                 borderRadius: 4,
               }}
             >
@@ -320,7 +334,6 @@ export default function OnboardingPage() {
           ))}
         </div>
 
-        {/* Step counter */}
         <span
           className="text-xs"
           style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}
@@ -353,10 +366,7 @@ export default function OnboardingPage() {
                 Which subjects do you<br />
                 <span style={{ color: "#C8FF00" }}>want to master?</span>
               </h2>
-              <p
-                className="text-sm mb-10"
-                style={{ color: "#6B6A80", lineHeight: 1.7 }}
-              >
+              <p className="text-sm mb-10" style={{ color: "#6B6A80", lineHeight: 1.7 }}>
                 Select all that apply. You can always change this later.
               </p>
 
@@ -379,7 +389,6 @@ export default function OnboardingPage() {
                         if (!active) e.currentTarget.style.borderColor = "#1E1E36";
                       }}
                     >
-                      {/* Symbol */}
                       <div
                         className="flex items-center justify-center flex-shrink-0 font-black text-lg"
                         style={{
@@ -391,8 +400,6 @@ export default function OnboardingPage() {
                           transition: "all 0.2s",
                         }}
                       >{s.symbol}</div>
-
-                      {/* Info */}
                       <div className="flex-1 min-w-0">
                         <div
                           className="text-sm font-black mb-0.5"
@@ -407,14 +414,10 @@ export default function OnboardingPage() {
                           style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}
                         >{s.example}</div>
                       </div>
-
-                      {/* Node count */}
                       <div
                         className="text-xs flex-shrink-0 hidden sm:block"
                         style={{ color: active ? s.color : "#1E1E36", fontFamily: "var(--font-dm-mono)" }}
                       >{s.nodes} nodes</div>
-
-                      {/* Checkmark */}
                       <div
                         className="flex items-center justify-center flex-shrink-0 transition-all duration-200"
                         style={{
@@ -424,10 +427,7 @@ export default function OnboardingPage() {
                         }}
                       >
                         {active && (
-                          <span
-                            className="text-xs font-black"
-                            style={{ color: "#08080F" }}
-                          >✓</span>
+                          <span className="text-xs font-black" style={{ color: "#08080F" }}>✓</span>
                         )}
                       </div>
                     </button>
@@ -459,10 +459,7 @@ export default function OnboardingPage() {
                 What is your current<br />
                 <span style={{ color: "#C8FF00" }}>level in each?</span>
               </h2>
-              <p
-                className="text-sm mb-10"
-                style={{ color: "#6B6A80", lineHeight: 1.7 }}
-              >
+              <p className="text-sm mb-10" style={{ color: "#6B6A80", lineHeight: 1.7 }}>
                 This calibrates your AI difficulty from day one. Be honest — it helps.
               </p>
 
@@ -472,7 +469,6 @@ export default function OnboardingPage() {
                   const level = levels[sid] ?? 0;
                   return (
                     <div key={sid}>
-                      {/* Subject header */}
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                           <div
@@ -490,8 +486,6 @@ export default function OnboardingPage() {
                             style={{ fontFamily: "var(--font-syne)", color: "#F0F0FF" }}
                           >{s.label}</span>
                         </div>
-
-                        {/* Level badge */}
                         <div
                           className="px-3 py-1 text-xs font-black"
                           style={{
@@ -505,27 +499,19 @@ export default function OnboardingPage() {
                           }}
                         >{LEVELS[level]}</div>
                       </div>
-
-                      {/* Slider */}
                       <div className="relative">
                         <input
                           type="range"
-                          min={0}
-                          max={4}
-                          value={level}
+                          min={0} max={4} value={level}
                           onChange={e => setLevel(sid, parseInt(e.target.value))}
                           className="w-full cursor-pointer"
                           style={{
                             appearance: "none",
                             height: 3,
                             outline: "none",
-                            background: `linear-gradient(to right,
-                              ${s.color} ${level * 25}%,
-                              #1E1E36 ${level * 25}%
-                            )`,
+                            background: `linear-gradient(to right, ${s.color} ${level * 25}%, #1E1E36 ${level * 25}%)`,
                           }}
                         />
-                        {/* Level labels */}
                         <div className="flex justify-between mt-2">
                           {LEVELS.map((l, i) => (
                             <span
@@ -570,10 +556,7 @@ export default function OnboardingPage() {
                 What are you<br />
                 <span style={{ color: "#C8FF00" }}>working toward?</span>
               </h2>
-              <p
-                className="text-sm mb-10"
-                style={{ color: "#6B6A80", lineHeight: 1.7 }}
-              >
+              <p className="text-sm mb-10" style={{ color: "#6B6A80", lineHeight: 1.7 }}>
                 This shapes your adaptive path and recommended practice sets.
               </p>
 
@@ -596,13 +579,10 @@ export default function OnboardingPage() {
                         if (!active) e.currentTarget.style.borderColor = "#1E1E36";
                       }}
                     >
-                      {/* Icon */}
                       <span
                         className="text-xl flex-shrink-0 transition-colors duration-200"
                         style={{ color: active ? "#C8FF00" : "#6B6A80" }}
                       >{g.icon}</span>
-
-                      {/* Text */}
                       <div className="flex-1">
                         <div
                           className="text-sm font-black mb-0.5 transition-colors duration-200"
@@ -620,8 +600,6 @@ export default function OnboardingPage() {
                           }}
                         >{g.desc}</div>
                       </div>
-
-                      {/* Checkmark */}
                       <div
                         className="flex items-center justify-center flex-shrink-0 transition-all duration-200"
                         style={{
@@ -631,10 +609,7 @@ export default function OnboardingPage() {
                         }}
                       >
                         {active && (
-                          <span
-                            className="text-xs font-black"
-                            style={{ color: "#08080F" }}
-                          >✓</span>
+                          <span className="text-xs font-black" style={{ color: "#08080F" }}>✓</span>
                         )}
                       </div>
                     </button>
@@ -691,24 +666,19 @@ export default function OnboardingPage() {
         </div>
       </div>
 
-      {/* Slider thumb styles */}
       <style>{`
         input[type='range']::-webkit-slider-thumb {
           -webkit-appearance: none;
-          width: 18px;
-          height: 18px;
+          width: 18px; height: 18px;
           background: #C8FF00;
           border: 2px solid #08080F;
           border-radius: 0;
           cursor: pointer;
           transition: transform 0.15s;
         }
-        input[type='range']::-webkit-slider-thumb:hover {
-          transform: scale(1.2);
-        }
+        input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.2); }
         input[type='range']::-moz-range-thumb {
-          width: 18px;
-          height: 18px;
+          width: 18px; height: 18px;
           background: #C8FF00;
           border: 2px solid #08080F;
           border-radius: 0;

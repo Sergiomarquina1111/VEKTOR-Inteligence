@@ -8,12 +8,37 @@ import { z } from "zod";
 import { signInWithEmail, signInWithGoogle } from "@/lib/auth";
 import { useAuthStore } from "@/store/authstore";
 import AuthSymbols from "@/components/webgl/AuthSymbols";
+import { VektorUser } from "@/types/user";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(6, "At least 6 characters"),
 });
 type FormData = z.infer<typeof schema>;
+
+// ── Role-aware navigation ─────────────────────────────────────────
+// Each role lands on their own dashboard after login.
+// If onboarding is not complete, everyone goes to /onboarding first.
+function navigateAfterAuth(
+  router: ReturnType<typeof useRouter>,
+  user: VektorUser
+) {
+  if (!user.onboardingComplete) {
+    router.refresh();
+    router.push("/onboarding");
+    return;
+  }
+ 
+  router.refresh();
+ 
+  switch (user.role) {
+    case "teacher":    router.push("/teacher");    break;
+    case "researcher": router.push("/researcher"); break;
+    case "admin":      router.push("/dashboard/admin"); break;
+    default:           router.push("/dashboard");  break; // student
+  }
+}
+ 
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,25 +47,31 @@ export default function LoginPage() {
   const [firebaseError, setFirebaseError] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } =
-    useForm<FormData>({ resolver: zodResolver(schema) });
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   async function onSubmit(data: FormData) {
     setFirebaseError("");
     try {
       const user = await signInWithEmail(data.email, data.password);
       setUser(user);
-      router.push(user.onboardingComplete ? "/dashboard" : "/onboarding");
+      navigateAfterAuth(router, user);
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
       if (
         code === "auth/invalid-credential" ||
-        code === "auth/wrong-password"    ||
+        code === "auth/wrong-password" ||
         code === "auth/user-not-found"
-      ) setFirebaseError("Incorrect email or password.");
-      else if (code === "auth/too-many-requests")
+      ) {
+        setFirebaseError("Incorrect email or password.");
+      } else if (code === "auth/too-many-requests") {
         setFirebaseError("Too many attempts. Please wait.");
-      else setFirebaseError(`Sign in failed: ${code || "unknown error"}`);
+      } else {
+        setFirebaseError(`Sign in failed: ${code || "unknown error"}`);
+      }
     }
   }
 
@@ -50,7 +81,7 @@ export default function LoginPage() {
     try {
       const user = await signInWithGoogle();
       setUser(user);
-      router.push(user.onboardingComplete ? "/dashboard" : "/onboarding");
+      navigateAfterAuth(router, user);
     } catch {
       setFirebaseError("Google sign-in failed.");
     } finally {
@@ -93,8 +124,6 @@ export default function LoginPage() {
               >INTELLIGENCE</div>
             </div>
           </div>
-
-          {/* Live indicator */}
           <div className="hidden sm:flex items-center gap-2">
             <div
               className="w-1.5 h-1.5 rounded-full"
@@ -110,7 +139,6 @@ export default function LoginPage() {
         {/* ── Main Form ── */}
         <div className="flex-1 flex flex-col justify-center py-10">
 
-          {/* Eyebrow */}
           <div className="flex items-center gap-3 mb-6">
             <div className="w-8 h-px" style={{ backgroundColor: "#C8FF00" }} />
             <span
@@ -119,7 +147,6 @@ export default function LoginPage() {
             >Sign in</span>
           </div>
 
-          {/* Headline */}
           <h1
             className="font-black leading-none mb-2"
             style={{
@@ -146,8 +173,8 @@ export default function LoginPage() {
               backgroundColor: "#0F0F1A",
               fontFamily: "var(--font-instrument)",
             }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = "#C8FF0050")}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = "#1E1E36")}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#C8FF0050")}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1E1E36")}
           >
             {googleLoading ? (
               <span style={{ color: "#6B6A80" }}>Connecting...</span>
@@ -174,7 +201,7 @@ export default function LoginPage() {
             <div className="flex-1 h-px" style={{ backgroundColor: "#1E1E36" }} />
           </div>
 
-          {/* Form fields */}
+          {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
 
             {/* Email */}
@@ -204,8 +231,7 @@ export default function LoginPage() {
                 onBlur={() => setFocusedField(null)}
               />
               {errors.email && (
-                <p className="text-xs mt-1.5 flex items-center gap-1.5"
-                  style={{ color: "#FF3D57" }}>
+                <p className="text-xs mt-1.5 flex items-center gap-1.5" style={{ color: "#FF3D57" }}>
                   <span>⚠</span>{errors.email.message}
                 </p>
               )}
@@ -226,8 +252,8 @@ export default function LoginPage() {
                   href="/auth/forgot"
                   className="text-xs transition-colors duration-200"
                   style={{ color: "#7B5CFF", fontFamily: "var(--font-dm-mono)" }}
-                  onMouseEnter={e => (e.currentTarget.style.color = "#C8FF00")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "#7B5CFF")}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#C8FF00")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#7B5CFF")}
                 >Forgot?</Link>
               </div>
               <input
@@ -247,8 +273,7 @@ export default function LoginPage() {
                 onBlur={() => setFocusedField(null)}
               />
               {errors.password && (
-                <p className="text-xs mt-1.5 flex items-center gap-1.5"
-                  style={{ color: "#FF3D57" }}>
+                <p className="text-xs mt-1.5 flex items-center gap-1.5" style={{ color: "#FF3D57" }}>
                   <span>⚠</span>{errors.password.message}
                 </p>
               )}
@@ -278,8 +303,8 @@ export default function LoginPage() {
                 color: "#08080F",
                 fontFamily: "var(--font-syne)",
               }}
-              onMouseEnter={e => (e.currentTarget.style.backgroundColor = "#DAFF33")}
-              onMouseLeave={e => (e.currentTarget.style.backgroundColor = "#C8FF00")}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#DAFF33")}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#C8FF00")}
             >
               {isSubmitting ? "SIGNING IN..." : "SIGN IN →"}
             </button>
@@ -287,16 +312,18 @@ export default function LoginPage() {
         </div>
 
         {/* ── Footer ── */}
-        <div className="flex items-center justify-between pt-4"
-          style={{ borderTop: "1px solid #1E1E36" }}>
+        <div
+          className="flex items-center justify-between pt-4"
+          style={{ borderTop: "1px solid #1E1E36" }}
+        >
           <p className="text-xs" style={{ color: "#6B6A80" }}>
             No account?{" "}
             <Link
               href="/auth/signup"
               className="transition-colors duration-200"
               style={{ color: "#F0F0FF" }}
-              onMouseEnter={e => (e.currentTarget.style.color = "#C8FF00")}
-              onMouseLeave={e => (e.currentTarget.style.color = "#F0F0FF")}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#C8FF00")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#F0F0FF")}
             >Create one free →</Link>
           </p>
           <span
@@ -308,11 +335,7 @@ export default function LoginPage() {
 
       {/* ── RIGHT — WebGL Panel ────────────────────────────── */}
       <div className="hidden lg:block flex-1 relative overflow-hidden">
-
-        {/* WebGL symbols fill entire panel */}
         <AuthSymbols />
-
-        {/* Vignette — darkens edges, symbols visible in center */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
@@ -323,19 +346,15 @@ export default function LoginPage() {
             `,
           }}
         />
-
-        {/* Bottom-left content — below the symbol cloud */}
         <div className="absolute bottom-12 left-14 right-14 z-10">
-
-          {/* Domain pill tags */}
           <div className="flex flex-wrap gap-2 mb-7">
             {[
-              { sym: "∫",  label: "Mathematics", color: "#C8FF00" },
-              { sym: "ψ",  label: "Quantum",     color: "#7B5CFF" },
-              { sym: "∇",  label: "Physics",     color: "#00E5FF" },
-              { sym: "λ",  label: "CS",          color: "#FFB800" },
-              { sym: "⇌",  label: "Chemistry",   color: "#2BD9A0" },
-            ].map(tag => (
+              { sym: "∫", label: "Mathematics", color: "#C8FF00" },
+              { sym: "ψ", label: "Quantum",     color: "#7B5CFF" },
+              { sym: "∇", label: "Physics",     color: "#00E5FF" },
+              { sym: "λ", label: "CS",          color: "#FFB800" },
+              { sym: "⇌", label: "Chemistry",   color: "#2BD9A0" },
+            ].map((tag) => (
               <div
                 key={tag.label}
                 className="flex items-center gap-1.5 px-3 py-1 text-xs"
@@ -351,8 +370,6 @@ export default function LoginPage() {
               </div>
             ))}
           </div>
-
-          {/* Headline */}
           <h2
             className="font-black leading-none mb-4"
             style={{
@@ -364,21 +381,18 @@ export default function LoginPage() {
             Direction for<br />
             <span style={{ color: "#C8FF00" }}>every mind.</span>
           </h2>
-
           <p
             className="text-sm mb-8"
             style={{ color: "#6B6A80", maxWidth: "400px", lineHeight: 1.8 }}
           >
             Every question you ask maps your understanding. Every session shows you exactly where to go next.
           </p>
-
-          {/* Stats */}
           <div className="flex gap-10">
             {[
               { val: "5",     label: "STEM subjects",   color: "#C8FF00" },
               { val: "T1–T4", label: "Knowledge tiers", color: "#7B5CFF" },
               { val: "AI",    label: "Powered tutor",   color: "#00E5FF" },
-            ].map(s => (
+            ].map((s) => (
               <div key={s.label}>
                 <div
                   className="text-2xl font-black leading-none mb-1"
@@ -392,10 +406,10 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
-
-        {/* Top-right live badge */}
-        <div className="absolute top-10 right-10 z-10 flex items-center gap-2 px-3 py-1.5"
-          style={{ border: "1px solid #C8FF0030", backgroundColor: "#C8FF0008" }}>
+        <div
+          className="absolute top-10 right-10 z-10 flex items-center gap-2 px-3 py-1.5"
+          style={{ border: "1px solid #C8FF0030", backgroundColor: "#C8FF0008" }}
+        >
           <div
             className="w-1.5 h-1.5 rounded-full"
             style={{ backgroundColor: "#C8FF00", animation: "pulse 2s infinite" }}
@@ -405,7 +419,6 @@ export default function LoginPage() {
             style={{ color: "#C8FF00", fontFamily: "var(--font-dm-mono)" }}
           >Knowledge Engine · Live</span>
         </div>
-
       </div>
 
       <style>{`
