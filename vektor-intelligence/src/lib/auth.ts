@@ -13,92 +13,135 @@ import { UserRole, VektorUser } from "@/types/user";
 
 const googleProvider = new GoogleAuthProvider();
 
+// ── Helpers ──────────────────────────────────────────────────────
+
+// Exported so AuthProvider can use it as a fallback when Firestore
+// is blocked by ERR_BLOCKED_BY_CLIENT (ad blockers, extensions, etc.)
+export function buildFallbackUser(
+  uid: string,
+  email: string,
+  displayName: string,
+  role: UserRole = "student"
+): VektorUser {
+  return {
+    uid,
+    email,
+    displayName: displayName || email.split("@")[0],
+    role,
+    subjects: [],
+    levels: {},
+    goal: "",
+    onboardingComplete: false,
+    createdAt: new Date().toISOString(),
+    plan: "free",
+  };
+}
+
+async function safeGetUser(uid: string): Promise<VektorUser | null> {
+  try {
+    const snap = await getDoc(doc(db, "users", uid));
+    return snap.exists() ? (snap.data() as VektorUser) : null;
+  } catch (err) {
+    console.warn("Firestore read blocked or failed:", err);
+    return null;
+  }
+}
+
+async function safeSaveUser(user: VektorUser): Promise<void> {
+  try {
+    await setDoc(doc(db, "users", user.uid), user);
+  } catch (err) {
+    console.warn("Firestore write blocked or failed:", err);
+  }
+}
+
+// ── Sign up with email ───────────────────────────────────────────
 export async function signUpWithEmail(
   email: string,
   password: string,
   displayName: string,
   role: UserRole
-) {
-  const credential = await createUserWithEmailAndPassword(auth, email, password);
+): Promise<VektorUser> {
+  const credential = await createUserWithEmailAndPassword(
+    auth,
+    email,
+    password
+  );
   await updateProfile(credential.user, { displayName });
 
-  const userData: VektorUser = {
-    uid: credential.user.uid,
+  const userData = buildFallbackUser(
+    credential.user.uid,
     email,
     displayName,
-    role,
-    subjects: [],
-    onboardingComplete: false,
-    createdAt: new Date().toISOString(),
-    plan: "free",
-  };
+    role
+  );
 
-  await setDoc(doc(db, "users", credential.user.uid), userData);
+  await safeSaveUser(userData);
   return userData;
 }
 
-export async function signInWithEmail(email: string, password: string) {
+// ── Sign in with email ───────────────────────────────────────────
+export async function signInWithEmail(
+  email: string,
+  password: string
+): Promise<VektorUser> {
   const credential = await signInWithEmailAndPassword(auth, email, password);
-  
-  // Retry up to 3 times in case Firestore is slow
+
+  // Try Firestore up to 3 times
   for (let i = 0; i < 3; i++) {
-    const snap = await getDoc(doc(db, "users", credential.user.uid));
-    if (snap.exists()) {
-      return snap.data() as VektorUser;
-    }
-    // Wait 500ms before retrying
+    const userData = await safeGetUser(credential.user.uid);
+    if (userData) return userData;
     await new Promise((r) => setTimeout(r, 500));
   }
 
-  // Firestore doc missing — create a fallback from Firebase Auth data
-  const fallback: VektorUser = {
-    uid: credential.user.uid,
-    email: credential.user.email!,
-    displayName: credential.user.displayName || email.split("@")[0],
-    role: "student",
-    subjects: [],
-    onboardingComplete: false,
-    createdAt: new Date().toISOString(),
-    plan: "free",
-  };
+  // Firestore unavailable — return fallback so navigation still works
+  console.warn("Firestore unavailable — using fallback user object");
+  const fallback = buildFallbackUser(
+    credential.user.uid,
+    credential.user.email!,
+    credential.user.displayName || email.split("@")[0],
+    "student"
+  );
 
-  // Write the missing doc so it exists next time
-  await setDoc(doc(db, "users", credential.user.uid), fallback);
+  // Save in background — do not block navigation
+  safeSaveUser(fallback);
   return fallback;
 }
 
-export async function signInWithGoogle(role?: UserRole) {
+// ── Sign in with Google ──────────────────────────────────────────
+export async function signInWithGoogle(role?: UserRole): Promise<VektorUser> {
   const credential = await signInWithPopup(auth, googleProvider);
-  const userRef = doc(db, "users", credential.user.uid);
-  const snap = await getDoc(userRef);
+  const uid = credential.user.uid;
 
-  if (!snap.exists()) {
-    const userData: VektorUser = {
-      uid: credential.user.uid,
-      email: credential.user.email!,
-      displayName: credential.user.displayName!,
-      role: role || "student",
-      subjects: [],
-      onboardingComplete: false,
-      createdAt: new Date().toISOString(),
-      plan: "free",
-    };
-    await setDoc(userRef, userData);
-    return userData;
-  }
+  const existing = await safeGetUser(uid);
+  if (existing) return existing;
 
-  return snap.data() as VektorUser;
+  // New Google user — create their document
+  const userData = buildFallbackUser(
+    uid,
+    credential.user.email!,
+    credential.user.displayName ||
+      credential.user.email!.split("@")[0],
+    role || "student"
+  );
+
+  await safeSaveUser(userData);
+  return userData;
 }
 
-export async function logOut() {
+// ── Sign out ─────────────────────────────────────────────────────
+export async function logOut(): Promise<void> {
   await signOut(auth);
 }
 
-export async function resetPassword(email: string) {
+// ── Reset password ───────────────────────────────────────────────
+export async function resetPassword(email: string): Promise<void> {
   await sendPasswordResetEmail(auth, email);
 }
 
-export async function getUserFromFirestore(uid: string): Promise<VektorUser | null> {
-  const snap = await getDoc(doc(db, "users", uid));
-  return snap.exists() ? (snap.data() as VektorUser) : null;
+// ── Get user from Firestore ──────────────────────────────────────
+export async function getUserFromFirestore(
+  uid: string
+): Promise<VektorUser | null> {
+  return safeGetUser(uid);
 }

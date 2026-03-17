@@ -1,21 +1,24 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_ROUTES = ["/", "/auth/login", "/auth/signup", "/auth/forgot"];
-
+/**
+ * VEKTOR Intelligence — Proxy (Next.js 16 middleware)
+ *
+ * Intentionally minimal. Firebase Auth manages its own session
+ * client-side via onAuthStateChanged + IndexedDB. It does NOT set
+ * a cookie called "vektor-auth" — so any cookie check here will
+ * always fail and block every navigation.
+ *
+ * Auth-gating is handled correctly inside dashboard/layout.tsx via
+ * useEffect + onAuthStateChanged. This proxy just passes all requests
+ * through cleanly without interference.
+ */
 export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const token = request.cookies.get("vektor-auth")?.value;
-
-  const isPublic = PUBLIC_ROUTES.some((route) => pathname === route);
-
-  if (!isPublic && !token) {
-    return NextResponse.redirect(new URL("/auth/login", request.url));
-  }
-
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|api|.*\\..*).*)",
+  ],
 };

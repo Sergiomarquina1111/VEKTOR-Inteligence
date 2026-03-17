@@ -49,7 +49,7 @@ export default function SignupPage() {
         data.email, data.password, data.displayName, role
       );
       setUser(user);
-      router.push("/onboarding");
+      window.location.href = "/onboarding";
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
       if (code === "auth/email-already-in-use")
@@ -65,7 +65,7 @@ export default function SignupPage() {
     try {
       const user = await signInWithGoogle(role);
       setUser(user);
-      router.push(user.onboardingComplete ? "/dashboard" : "/onboarding");
+      window.location.href = user.onboardingComplete ? "/dashboard" : "/onboarding";
     } catch {
       setFirebaseError("Google sign-in failed.");
     } finally {
