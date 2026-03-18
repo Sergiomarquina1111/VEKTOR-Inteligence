@@ -6,9 +6,9 @@ import { useAuthStore } from "@/store/authstore";
 import { logOut } from "@/lib/auth";
 
 const NAV = [
-  { href: "/dashboard",          label: "Session",  icon: "◈", desc: "Ask · Explore · Learn"   },
-  { href: "/dashboard/practice", label: "Practice", icon: "◇", desc: "Tasks · Drills · Quiz"    },
-  { href: "/dashboard/progress", label: "Progress", icon: "◉", desc: "Growth · Rings · Streak"  },
+  { href: "/dashboard",          label: "Session",  icon: "◈", desc: "Ask · Explore · Learn"  },
+  { href: "/dashboard/practice", label: "Practice", icon: "◇", desc: "Tasks · Drills · Quiz"   },
+  { href: "/dashboard/progress", label: "Progress", icon: "◉", desc: "Growth · Rings · Streak" },
 ];
 
 const SUBJECT_COLORS: Record<string, string> = {
@@ -18,7 +18,6 @@ const SUBJECT_COLORS: Record<string, string> = {
   biology:          "#3A6B00",
   computer_science: "#7A5200",
 };
-
 const SUBJECT_SYMBOLS: Record<string, string> = {
   mathematics:      "∫",
   physics:          "∇",
@@ -38,7 +37,6 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [signingOut,  setSigningOut]  = useState(false);
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (!loading && !user) window.location.href = "/auth/login";
     if (!loading && user && !user.onboardingComplete)
@@ -80,7 +78,7 @@ export default function DashboardLayout({
   );
 
   const initials = user.displayName
-    ? user.displayName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()
+    ? user.displayName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()
     : "VI";
 
   return (
@@ -88,9 +86,7 @@ export default function DashboardLayout({
       className="min-h-screen flex"
       style={{ backgroundColor: "#08080F" }}
     >
-
-      {/* ── SIDEBAR ────────────────────────────────────────── */}
-      {/* Mobile overlay */}
+      {/* ── SIDEBAR ─────────────────────────────────────────── */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-20 lg:hidden"
@@ -108,7 +104,6 @@ export default function DashboardLayout({
           transform: sidebarOpen ? "translateX(0)" : undefined,
         }}
       >
-
         {/* Logo */}
         <div
           className="flex items-center gap-3 px-5 py-5 flex-shrink-0"
@@ -137,7 +132,6 @@ export default function DashboardLayout({
               style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)", fontSize: "10px" }}
             >INTELLIGENCE</div>
           </div>
-          {/* Mobile close */}
           <button
             className="ml-auto lg:hidden"
             onClick={() => setSidebarOpen(false)}
@@ -207,22 +201,19 @@ export default function DashboardLayout({
             );
           })}
 
-          {/* Subjects section */}
+          {/* Subjects */}
           <p
             className="text-xs tracking-widest uppercase px-2 mb-3 mt-6"
             style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)", fontSize: "10px" }}
           >Your subjects</p>
 
           {user.subjects && user.subjects.length > 0 ? (
-            user.subjects.map(sid => {
+            user.subjects.map((sid: string) => {
               const color  = SUBJECT_COLORS[sid]  || "#6B6A80";
               const symbol = SUBJECT_SYMBOLS[sid] || "○";
               const label  = sid.replace("_", " ");
               return (
-                <div
-                  key={sid}
-                  className="flex items-center gap-2 px-3 py-2 mb-1"
-                >
+                <div key={sid} className="flex items-center gap-2 px-3 py-2 mb-1">
                   <div
                     className="flex items-center justify-center flex-shrink-0 font-mono text-xs"
                     style={{
@@ -241,13 +232,12 @@ export default function DashboardLayout({
               );
             })
           ) : (
-            <p
-              className="text-xs px-3"
-              style={{ color: "#1E1E36", fontFamily: "var(--font-dm-mono)" }}
-            >No subjects selected</p>
+            <p className="text-xs px-3" style={{ color: "#1E1E36", fontFamily: "var(--font-dm-mono)" }}>
+              No subjects selected
+            </p>
           )}
 
-          {/* Teacher info — only if enrolled */}
+          {/* Teacher info */}
           {user.teacherId && (
             <>
               <p
@@ -260,28 +250,17 @@ export default function DashboardLayout({
               >
                 <div
                   className="flex items-center justify-center flex-shrink-0 text-xs font-black"
-                  style={{
-                    width: 28, height: 28,
-                    backgroundColor: "#00E5FF20",
-                    color: "#00E5FF",
-                    fontFamily: "var(--font-syne)",
-                  }}
+                  style={{ width: 28, height: 28, backgroundColor: "#00E5FF20", color: "#00E5FF", fontFamily: "var(--font-syne)" }}
                 >T</div>
                 <div className="min-w-0">
-                  <div
-                    className="text-xs font-bold truncate"
-                    style={{ color: "#00E5FF", fontFamily: "var(--font-syne)" }}
-                  >Enrolled</div>
-                  <div
-                    className="truncate"
-                    style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)", fontSize: "10px" }}
-                  >Class active</div>
+                  <div className="text-xs font-bold truncate" style={{ color: "#00E5FF", fontFamily: "var(--font-syne)" }}>Enrolled</div>
+                  <div className="truncate" style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)", fontSize: "10px" }}>Class active</div>
                 </div>
               </div>
             </>
           )}
 
-          {/* Solo mode badge */}
+          {/* Solo mode */}
           {!user.teacherId && (
             <>
               <p
@@ -292,34 +271,47 @@ export default function DashboardLayout({
                 className="flex items-center gap-2 px-3 py-2"
                 style={{ border: "1px solid #1E1E36" }}
               >
-                <div
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: "#C8FF00" }}
-                />
-                <span
-                  className="text-xs"
-                  style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}
-                >Solo mode</span>
+                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: "#C8FF00" }} />
+                <span className="text-xs" style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>Solo mode</span>
               </div>
             </>
           )}
         </nav>
 
-        {/* Bottom — user info + sign out */}
-        <div
-          className="flex-shrink-0 p-4"
-          style={{ borderTop: "1px solid #1E1E36" }}
-        >
-          {/* Plan badge */}
-          <div
-            className="flex items-center justify-between mb-3 px-1"
+        {/* Bottom — Settings + user info + sign out */}
+        <div className="flex-shrink-0 p-4" style={{ borderTop: "1px solid #1E1E36" }}>
+
+          {/* ── Settings link ── */}
+          <Link
+            href="/settings"
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-2 px-3 py-2.5 mb-3 transition-all duration-150"
+            style={{
+              border: `1px solid ${pathname === "/settings" ? "#C8FF0030" : "#1E1E36"}`,
+              backgroundColor: pathname === "/settings" ? "#C8FF0010" : "transparent",
+              color: pathname === "/settings" ? "#C8FF00" : "#6B6A80",
+            }}
+            onMouseEnter={e => {
+              if (pathname !== "/settings") e.currentTarget.style.backgroundColor = "#0F0F1A";
+            }}
+            onMouseLeave={e => {
+              if (pathname !== "/settings") e.currentTarget.style.backgroundColor = "transparent";
+            }}
           >
+            <span style={{ fontSize: 13 }}>⚙</span>
             <span
-              className="text-xs"
-              style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}
-            >{user.email}</span>
+              className="text-xs font-bold"
+              style={{ fontFamily: "var(--font-instrument)" }}
+            >Settings</span>
+          </Link>
+
+          {/* Plan badge + email */}
+          <div className="flex items-center justify-between mb-3 px-1">
+            <span className="text-xs truncate" style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>
+              {user.email}
+            </span>
             <div
-              className="px-2 py-0.5 text-xs font-black"
+              className="px-2 py-0.5 text-xs font-black ml-2 flex-shrink-0"
               style={{
                 backgroundColor: user.plan === "pro" ? "#7B5CFF20" : "#1E1E36",
                 color: user.plan === "pro" ? "#7B5CFF" : "#6B6A80",
@@ -415,24 +407,43 @@ export default function DashboardLayout({
             >{formatDate()}</p>
           </div>
 
-          {/* Right side — streak + live indicator */}
-          <div className="flex items-center gap-4">
-
+          {/* Right side */}
+          <div className="flex items-center gap-3">
             {/* Streak */}
             <div
               className="hidden sm:flex items-center gap-2 px-3 py-1.5"
               style={{ border: "1px solid #1E1E36", backgroundColor: "#0F0F1A" }}
             >
               <span style={{ color: "#C8FF00", fontSize: 14 }}>◆</span>
-              <span
-                className="text-xs font-black"
-                style={{ fontFamily: "var(--font-dm-mono)", color: "#F0F0FF" }}
-              >{user.streak ?? 0}</span>
-              <span
-                className="text-xs"
-                style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}
-              >day streak</span>
+              <span className="text-xs font-black" style={{ fontFamily: "var(--font-dm-mono)", color: "#F0F0FF" }}>
+                {user.streak ?? 0}
+              </span>
+              <span className="text-xs" style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>
+                day streak
+              </span>
             </div>
+
+            {/* Settings icon — top bar shortcut */}
+            <Link
+              href="/settings"
+              className="flex items-center justify-center transition-all duration-150"
+              style={{
+                width: 34, height: 34,
+                border: `1px solid ${pathname === "/settings" ? "#C8FF0040" : "#1E1E36"}`,
+                backgroundColor: pathname === "/settings" ? "#C8FF0010" : "#0F0F1A",
+                color: pathname === "/settings" ? "#C8FF00" : "#6B6A80",
+                fontSize: 15,
+              }}
+              title="Settings"
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = "#C8FF0040";
+                e.currentTarget.style.color = "#C8FF00";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = pathname === "/settings" ? "#C8FF0040" : "#1E1E36";
+                e.currentTarget.style.color = pathname === "/settings" ? "#C8FF00" : "#6B6A80";
+              }}
+            >⚙</Link>
 
             {/* Live dot */}
             <div className="flex items-center gap-2">
