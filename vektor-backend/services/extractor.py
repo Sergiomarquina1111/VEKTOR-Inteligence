@@ -1,6 +1,8 @@
 """
 Layer 1 — Natural Language Triple Extraction
-Gemini API only. Exponential backoff: 200ms / 400ms / 800ms.
+Uses the new Google Gen AI SDK (google-genai).
+Retries 3 times with 200/400/800ms backoff.
+Deterministic T4 fallback if all attempts fail.
 """
 
 import os
@@ -13,34 +15,36 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# ─── Load prompt once at module import ────────────────────────────────────────
+# ─── Load prompt once at module import ───────────────────────────────────────
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "triple_extraction.txt"
 _EXTRACTION_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 
 # ─── Allowed values ───────────────────────────────────────────────────────────
 VALID_SUBJECTS = {"mathematics", "physics", "chemistry", "biology", "computer_science"}
-VALID_RELATIONS = {"requires", "leads_to", "is_defined_as", "is_opposite_of", "is_type_of", "causes", "equals", "part_of"}
-VALID_HINTS    = {"orbital", "wave", "force", "transform", "graph_plot", "geometry", "sort", "graph_traversal", "molecular", "reaction"}
+VALID_RELATIONS = {"requires", "leads_to", "is_defined_as", "is_opposite_of",
+                   "is_type_of", "causes", "equals", "part_of"}
+VALID_HINTS = {"orbital", "wave", "force", "transform", "graph_plot",
+               "geometry", "sort", "graph_traversal", "molecular", "reaction"}
 SUBJECT_ALIASES = {
     "math": "mathematics", "maths": "mathematics",
-    "cs": "computer_science", "comp sci": "computer_science", "computer science": "computer_science",
+    "cs": "computer_science", "comp sci": "computer_science",
+    "computer science": "computer_science",
     "bio": "biology", "chem": "chemistry", "phys": "physics",
 }
 
 # ─── Gemini client (lazy) ─────────────────────────────────────────────────────
-_gemini_client = None   # genai.GenerativeModel — imported lazily
+_genai_client = None
 
 
-def _get_gemini():
-    global _gemini_client
-    if _gemini_client is None:
-        import google.generativeai as genai
+def _get_client():
+    global _genai_client
+    if _genai_client is None:
+        from google import genai
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY not set")
-        genai.configure(api_key=api_key)
-        _gemini_client = genai.GenerativeModel("gemini-1.5-flash")
-    return _gemini_client
+        _genai_client = genai.Client(api_key=api_key)
+    return _genai_client
 
 
 # ─── JSON cleaning ────────────────────────────────────────────────────────────
@@ -93,10 +97,19 @@ def _validate_and_normalise(data: dict) -> dict:
 # ─── Gemini call ──────────────────────────────────────────────────────────────
 
 async def _call_gemini(query: str) -> dict:
-    model = _get_gemini()
+    client = _get_client()
     full_prompt = f"{_EXTRACTION_PROMPT}\n\nStudent query: {query}"
-    response = await asyncio.to_thread(model.generate_content, full_prompt)
-    data = json.loads(_clean_json(response.text))
+
+    response = await asyncio.to_thread(
+        client.models.generate_content,
+        model="gemini-2.5-flash",
+        contents=full_prompt,
+    )
+
+    raw = response.text
+    logger.debug("Gemini raw response: %.200s", raw)
+    cleaned = _clean_json(raw)
+    data = json.loads(cleaned)
     return _validate_and_normalise(data)
 
 
@@ -111,11 +124,12 @@ async def extract_triples(query: str, subject_override: Optional[str] = None) ->
     last_error = None
     for attempt, delay_ms in enumerate([200, 400, 800], 1):
         try:
-            logger.info("Gemini extraction attempt %d — %.60s...", attempt, query)
+            logger.info("Gemini extraction attempt %d — %.80s...", attempt, query)
             result = await _call_gemini(query)
             if subject_override:
                 result["subject"] = subject_override
-            logger.info("Extraction OK (attempt %d, %d triples)", attempt, len(result["triples"]))
+            logger.info("Extraction OK — attempt %d, %d triples, subject=%s",
+                        attempt, len(result["triples"]), result["subject"])
             return result
         except Exception as e:
             last_error = e

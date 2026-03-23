@@ -1,5 +1,5 @@
 # VEKTOR Intelligence — Triple Extraction Prompt
-# Version: 1.0.0
+# Version: 1.1.0
 # Purpose: Extract relational knowledge triples from a student's STEM query
 # Used by: services/extractor.py
 # DO NOT modify without bumping the version number
@@ -28,9 +28,9 @@ OUTPUT FORMAT — respond ONLY with valid JSON, no markdown fences, no preamble:
   "subjectConfidence": 0.95,
   "triples": [
     {
-      "subject": "concept name exactly as student described",
+      "subject": "atomic concept name (1-3 words)",
       "relation": "requires | leads_to | is_defined_as | is_opposite_of | is_type_of | causes | equals | part_of",
-      "object": "concept name exactly as student described",
+      "object": "atomic concept name (1-3 words)",
       "confidence": 0.9
     }
   ],
@@ -38,12 +38,20 @@ OUTPUT FORMAT — respond ONLY with valid JSON, no markdown fences, no preamble:
   "simulationHint": null
 }
 
-RULES:
-1. Extract between 2 and 8 triples. Never more than 8.
-2. Use the student's own language for concept names — do not normalize to textbook terms.
-3. confidence is your certainty that this triple reflects the student's belief (0.0–1.0).
-4. subjectConfidence is your certainty about subject detection (0.0–1.0).
-5. If the query is too vague to extract triples, return an empty triples array.
+CONCEPT NAME RULES — this is critical for graph matching:
+1. Concept names (subject and object fields) MUST be short atomic terms: 1 to 4 words maximum.
+2. Extract the core concept noun — strip qualifiers, context, and parentheticals.
+   BAD:  "not differentiable at its critical point"  →  GOOD: "differentiability"
+   BAD:  "critical point (of |x|)"                  →  GOOD: "critical point"
+   BAD:  "vectors that don't change direction"       →  GOOD: "eigenvector"
+   BAD:  "multiply exponent by coefficient"          →  GOOD: "power rule"
+   BAD:  "dependent on object mass"                  →  GOOD: "gravitational acceleration"
+3. Use the closest standard academic term that matches what the student is describing.
+   If the student says "|x|", the concept is "absolute value function".
+   If the student says "sharp point", the concept is "sharp point" (keep it — it maps to critical points / cusps).
+   If the student says "slope of tangent", the concept is "derivative".
+4. The RELATION captures the student's belief (right or wrong). The concept names should be normalised.
+5. Extract between 2 and 8 triples. Never more than 8.
 6. Never add triples that the student did not state or clearly imply.
 
 EXAMPLES:
@@ -53,9 +61,23 @@ Student query: "The derivative of x squared is 2x because you multiply the expon
   "subject": "mathematics",
   "subjectConfidence": 0.99,
   "triples": [
-    {"subject": "derivative of x squared", "relation": "equals", "object": "2x", "confidence": 0.98},
+    {"subject": "derivative", "relation": "equals", "object": "2x", "confidence": 0.98},
     {"subject": "differentiation", "relation": "requires", "object": "power rule", "confidence": 0.85},
-    {"subject": "power rule", "relation": "is_defined_as", "object": "multiply exponent by coefficient then reduce power by one", "confidence": 0.97}
+    {"subject": "power rule", "relation": "is_defined_as", "object": "differentiation rules", "confidence": 0.97}
+  ],
+  "simulatable": true,
+  "simulationHint": "graph_plot"
+}
+
+Student query: "|x| is not differentiable at its critical point, that is sharp point"
+{
+  "subject": "mathematics",
+  "subjectConfidence": 0.98,
+  "triples": [
+    {"subject": "absolute value function", "relation": "is_defined_as", "object": "non-differentiable", "confidence": 0.92},
+    {"subject": "non-differentiable", "relation": "leads_to", "object": "critical point", "confidence": 0.88},
+    {"subject": "sharp point", "relation": "is_type_of", "object": "critical point", "confidence": 0.85},
+    {"subject": "differentiability", "relation": "requires", "object": "continuity", "confidence": 0.80}
   ],
   "simulatable": true,
   "simulationHint": "graph_plot"
@@ -66,9 +88,9 @@ Student query: "Heavier objects fall faster because they have more gravity pulli
   "subject": "physics",
   "subjectConfidence": 0.98,
   "triples": [
-    {"subject": "heavier objects", "relation": "causes", "object": "faster falling", "confidence": 0.95},
-    {"subject": "mass", "relation": "causes", "object": "stronger gravitational pull", "confidence": 0.90},
-    {"subject": "gravitational acceleration", "relation": "is_defined_as", "object": "dependent on object mass", "confidence": 0.87}
+    {"subject": "mass", "relation": "causes", "object": "falling speed", "confidence": 0.95},
+    {"subject": "mass", "relation": "causes", "object": "gravitational pull", "confidence": 0.90},
+    {"subject": "gravitational acceleration", "relation": "is_defined_as", "object": "mass dependent", "confidence": 0.87}
   ],
   "simulatable": true,
   "simulationHint": "force"
@@ -79,11 +101,24 @@ Student query: "Eigenvalues are the vectors that don't change direction when you
   "subject": "mathematics",
   "subjectConfidence": 0.97,
   "triples": [
-    {"subject": "eigenvalues", "relation": "is_defined_as", "object": "vectors that don't change direction under matrix transformation", "confidence": 0.80},
-    {"subject": "matrix transformation", "relation": "leads_to", "object": "direction-invariant vectors", "confidence": 0.75}
+    {"subject": "eigenvalue", "relation": "is_defined_as", "object": "eigenvector", "confidence": 0.80},
+    {"subject": "matrix transformation", "relation": "leads_to", "object": "eigenvector", "confidence": 0.75}
   ],
   "simulatable": true,
   "simulationHint": "transform"
+}
+
+Student query: "Derivative is nothing but slope of tangent to the curve at a given point"
+{
+  "subject": "mathematics",
+  "subjectConfidence": 0.99,
+  "triples": [
+    {"subject": "derivative", "relation": "is_defined_as", "object": "slope of tangent", "confidence": 0.97},
+    {"subject": "derivative", "relation": "requires", "object": "limit", "confidence": 0.85},
+    {"subject": "differentiation", "relation": "leads_to", "object": "critical point", "confidence": 0.75}
+  ],
+  "simulatable": true,
+  "simulationHint": "graph_plot"
 }
 
 Now extract triples from the following student query:
