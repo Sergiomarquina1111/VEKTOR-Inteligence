@@ -26,6 +26,8 @@ from models.session import (
     GraphNode,
     GraphEdge,
     KnowledgeGraph,
+    DKGGraph,
+    DKGNode,
     SimulationResponse,
 )
 from services import (
@@ -159,7 +161,7 @@ async def session_analyze(
     Layer 2: Build SKG, load DKG, semantic match via sentence-transformers
     Layer 3: 6 comparison metrics, T1–T4 classification
     Layer 4: RAG context built from matched DKG nodes → injected into Gemini explanation prompt
-    Layer 5: Return complete SessionAnalyzeResponse
+    Layer 5: Return complete SessionAnalyzeResponse including full DKG subgraph
     """
     start_time = time.time()
     session_id = str(uuid.uuid4())
@@ -172,7 +174,10 @@ async def session_analyze(
     subject            = extraction["subject"]
     triples            = extraction["triples"]
     subject_confidence = extraction["subjectConfidence"]
-    logger.info("Session %s: subject=%s %d triples extracted", session_id, subject, len(triples))
+    simulatable        = extraction.get("simulatable", False)
+    simulation_hint    = extraction.get("simulationHint")
+    logger.info("Session %s: subject=%s %d triples extracted simulatable=%s hint=%s",
+                session_id, subject, len(triples), simulatable, simulation_hint)
 
     # ── Layer 2: Build SKG + load DKG + semantic match ────────────────────────
     skg_nx = build_skg(triples)
@@ -181,7 +186,7 @@ async def session_analyze(
     if dkg_result is None:
         import networkx as _nx
         dkg_nx  = _nx.DiGraph()
-        dkg_raw = {"version": "none", "nodeCount": 0, "edgeCount": 0}
+        dkg_raw = {"version": "none", "nodeCount": 0, "edgeCount": 0, "nodes": [], "edges": []}
         logger.warning("Session %s: no DKG for subject '%s'", session_id, subject)
     else:
         dkg_raw, dkg_nx = dkg_result
@@ -194,10 +199,10 @@ async def session_analyze(
     tier, tier_score, tier_label = classify_tier(metrics, skg_nx)
     gaps           = build_gap_list(skg_to_dkg, dkg_nx, metrics)
     misconceptions = build_misconception_list(skg_nx, dkg_nx, skg_to_dkg)
-    logger.info("Session %s: tier=%s score=%.3f gaps=%d T3=%d", session_id, tier, tier_score, len(gaps), len(misconceptions))
+    logger.info("Session %s: tier=%s score=%.3f gaps=%d T3=%d",
+                session_id, tier, tier_score, len(gaps), len(misconceptions))
 
     # ── Layer 4: RAG explanation ──────────────────────────────────────────────
-    # skg_to_dkg and dkg_nx are passed so the explainer can retrieve DKG context
     explanation, adaptive_path = await generate_explanation(
         query=body.query,
         tier=tier,
@@ -207,7 +212,7 @@ async def session_analyze(
         dkg=dkg_nx,
     )
 
-    # ── Build response graph objects ──────────────────────────────────────────
+    # ── Build SKG response ────────────────────────────────────────────────────
     skg_nodes = [
         GraphNode(
             id=n,
@@ -228,10 +233,71 @@ async def session_analyze(
         for src, tgt, data in skg_nx.edges(data=True)
     ]
 
-    elapsed_ms = int((time.time() - start_time) * 1000)
-    logger.info("Session %s complete in %dms", session_id, elapsed_ms)
+    # ── Build DKG response subgraph ───────────────────────────────────────────
+    # Include: all matched DKG nodes + their 1-hop neighbours + missing critical nodes
+    matched_dkg_ids = {v for v in skg_to_dkg.values() if v is not None}
+    missing_critical_ids = {
+        _label_to_id(label, dkg_nx)
+        for label in metrics.missing_critical_nodes
+    }
+    misconception_dkg_ids = {m.dkg_node_id for m in misconceptions}
+    gap_dkg_ids = {g.dkg_node_id for g in gaps if g.dkg_node_id != "unmatched"}
 
-    # TODO Session 7: write session to Firestore
+    # Expand to include 1-hop prereqs so the graph shows context
+    expanded_ids = set(matched_dkg_ids) | missing_critical_ids | misconception_dkg_ids | gap_dkg_ids
+    for node_id in list(matched_dkg_ids):
+        if node_id in dkg_nx:
+            for prereq in dkg_nx.predecessors(node_id):
+                expanded_ids.add(prereq)
+            for successor in dkg_nx.successors(node_id):
+                expanded_ids.add(successor)
+
+    # Build DKG nodes list
+    dkg_nodes_response: list[DKGNode] = []
+    for node_id in expanded_ids:
+        if node_id not in dkg_nx:
+            continue
+        node_data = dkg_nx.nodes[node_id]
+        is_matched = node_id in matched_dkg_ids
+
+        # Determine match status for this DKG node
+        if node_id in misconception_dkg_ids:
+            match_status = "misconception"
+        elif node_id in gap_dkg_ids or node_id in missing_critical_ids:
+            match_status = "gap"
+        elif is_matched:
+            match_status = "aligned"
+        else:
+            match_status = "unvisited"
+
+        dkg_nodes_response.append(DKGNode(
+            id=node_id,
+            label=node_data.get("label", node_id),
+            tier=node_data.get("tier", "foundational"),
+            description=node_data.get("description", ""),
+            prerequisites=node_data.get("prerequisites", []),
+            is_matched=is_matched,
+            match_status=match_status,
+        ))
+
+    # Build DKG edges — only edges between nodes we're including
+    included_ids = {n.id for n in dkg_nodes_response}
+    dkg_edges_response = [
+        GraphEdge(
+            source=src,
+            target=tgt,
+            relation=data.get("relation", "leads_to"),
+            contradicts_dkg=False,
+        )
+        for src, tgt, data in dkg_nx.edges(data=True)
+        if src in included_ids and tgt in included_ids
+    ]
+
+    elapsed_ms = int((time.time() - start_time) * 1000)
+    logger.info("Session %s complete in %dms — SKG:%d nodes, DKG:%d nodes",
+                session_id, elapsed_ms, len(skg_nodes), len(dkg_nodes_response))
+
+    # TODO Session 9: write session to Firestore from backend
     # await save_session_to_firestore(session_id, uid, body.classId, ...)
 
     return SessionAnalyzeResponse(
@@ -244,12 +310,16 @@ async def session_analyze(
         tierScore=tier_score,
         query=body.query,
         skg=KnowledgeGraph(nodes=skg_nodes, edges=skg_edges),
+        dkg=DKGGraph(nodes=dkg_nodes_response, edges=dkg_edges_response),
         metrics=metrics,
         gaps=gaps,
         misconceptions=misconceptions,
         explanation=explanation,
         adaptivePath=adaptive_path,
-        simulation=SimulationResponse(simulatable=extraction.get("simulatable", False)),
+        simulation=SimulationResponse(
+            simulatable=simulatable,
+            simulationHint=simulation_hint,
+        ),
         dkgVersion=dkg_raw.get("version", "unknown"),
         dkgNodeCount=dkg_raw.get("nodeCount", 0),
         processingTimeMs=elapsed_ms,
@@ -337,3 +407,11 @@ def _is_contradiction(src: str, tgt: str, skg_to_dkg: dict, dkg_nx) -> bool:
     if dkg_src and dkg_tgt and dkg_src in dkg_nx and dkg_tgt in dkg_nx:
         return dkg_nx.has_edge(dkg_tgt, dkg_src)
     return False
+
+
+def _label_to_id(label: str, dkg_nx) -> str:
+    """Reverse lookup: find a node ID by its label."""
+    for node_id, data in dkg_nx.nodes(data=True):
+        if data.get("label", "").lower() == label.lower():
+            return node_id
+    return label  # fallback to label itself

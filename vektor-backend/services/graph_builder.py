@@ -158,7 +158,7 @@ def build_skg(triples: list[dict]) -> nx.DiGraph:
 
 # ─── Semantic matching ────────────────────────────────────────────────────────
 
-_SIMILARITY_THRESHOLD = 0.72  # minimum cosine similarity to count as a match
+_SIMILARITY_THRESHOLD = 0.45  # minimum cosine similarity to count as a match
 
 
 def match_skg_to_dkg(skg: nx.DiGraph, subject: str) -> dict[str, Optional[str]]:
@@ -195,10 +195,10 @@ def match_skg_to_dkg(skg: nx.DiGraph, subject: str) -> dict[str, Optional[str]]:
         best_score = float(similarity_matrix[i][best_idx])
         if best_score >= _SIMILARITY_THRESHOLD:
             mapping[skg_label] = node_ids[best_idx]
-            logger.debug("Matched '%s' → '%s' (score=%.3f)", skg_label, node_ids[best_idx], best_score)
+            logger.info("MATCH '%s' → '%s' (score=%.3f)", skg_label, node_ids[best_idx], best_score)
         else:
             mapping[skg_label] = None
-            logger.debug("No match for '%s' (best score=%.3f)", skg_label, best_score)
+            logger.info("NO MATCH '%s' best=%s score=%.3f (threshold=%.2f)", skg_label, node_ids[best_idx], best_score, _SIMILARITY_THRESHOLD)
 
     return mapping
 

@@ -34,9 +34,20 @@ class SessionAnalyzeRequest(BaseModel):
 class GraphNode(BaseModel):
     id: str
     label: str
-    tier: Optional[str] = None        # T1/T2/T3/T4 after comparison
+    tier: Optional[str] = None          # DKG tier: foundational / intermediate / advanced / expert
     matched_dkg_id: Optional[str] = None
     similarity_score: Optional[float] = None
+
+
+class DKGNode(BaseModel):
+    """A node from the Domain Knowledge Graph — sent to frontend for visualisation."""
+    id: str
+    label: str
+    tier: str                            # foundational / intermediate / advanced / expert
+    description: str
+    prerequisites: list[str] = []        # list of node IDs
+    is_matched: bool = False             # true if any SKG node matched this DKG node
+    match_status: str = "unvisited"      # aligned | gap | misconception | unvisited
 
 
 class GraphEdge(BaseModel):
@@ -48,6 +59,11 @@ class GraphEdge(BaseModel):
 
 class KnowledgeGraph(BaseModel):
     nodes: list[GraphNode]
+    edges: list[GraphEdge]
+
+
+class DKGGraph(BaseModel):
+    nodes: list[DKGNode]
     edges: list[GraphEdge]
 
 
@@ -96,6 +112,7 @@ class SimulationParams(BaseModel):
 
 class SimulationResponse(BaseModel):
     simulatable: bool
+    simulationHint: Optional[str] = None   # orbital | wave | force | transform | graph_plot | sort | ...
     simulation: Optional[SimulationParams] = None
 
 
@@ -111,6 +128,7 @@ class SessionAnalyzeResponse(BaseModel):
     tierScore: float                  # 0.0–1.0 alignment score
     query: str
     skg: KnowledgeGraph               # Student Knowledge Graph
+    dkg: DKGGraph                     # Domain Knowledge Graph — relevant nodes only
     metrics: GraphMetrics
     gaps: list[GapItem]
     misconceptions: list[MisconceptionItem]
