@@ -1,0 +1,574 @@
+{
+  "subject": "mathematics",
+  "subtopic": "calculus",
+  "version": "1.0.0",
+  "nodeCount": 20,
+  "edgeCount": 36,
+  "nodes": [
+    {
+      "id": "functions",
+      "label": "Functions",
+      "description": "A relation mapping each input to exactly one output. The fundamental building block of calculus.",
+      "tier": "foundational",
+      "aliases": [
+        "function",
+        "f(x)",
+        "mapping",
+        "real-valued function"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "limits",
+      "label": "Limits",
+      "description": "The value a function approaches as the input approaches a point. Foundation of all calculus definitions.",
+      "tier": "foundational",
+      "aliases": [
+        "limit",
+        "lim",
+        "limiting value",
+        "approaching"
+      ],
+      "prerequisites": [
+        "functions"
+      ]
+    },
+    {
+      "id": "continuity",
+      "label": "Continuity",
+      "description": "A function is continuous at a point if the limit equals the function value. No jumps or holes.",
+      "tier": "foundational",
+      "aliases": [
+        "continuous",
+        "continuous function",
+        "continuity at a point",
+        "discontinuity",
+        "discontinuous",
+        "not continuous",
+        "non-differentiable",
+        "sharp corner",
+        "sharp point",
+        "cusp",
+        "jump discontinuity",
+        "absolute value function",
+        "|x|"
+      ],
+      "prerequisites": [
+        "limits",
+        "functions"
+      ]
+    },
+    {
+      "id": "derivatives",
+      "label": "Derivatives",
+      "description": "The instantaneous rate of change of a function. Defined as the limit of the difference quotient.",
+      "tier": "foundational",
+      "aliases": [
+        "derivative",
+        "differentiation",
+        "f prime",
+        "dy/dx",
+        "d/dx",
+        "gradient",
+        "differentiable",
+        "differentiability",
+        "not differentiable",
+        "non-differentiable",
+        "differentiable function",
+        "rate of change",
+        "slope of tangent",
+        "instantaneous rate"
+      ],
+      "prerequisites": [
+        "limits",
+        "functions",
+        "continuity"
+      ]
+    },
+    {
+      "id": "differentiation_rules",
+      "label": "Differentiation Rules",
+      "description": "Rules for computing derivatives: power rule, product rule, quotient rule, chain rule.",
+      "tier": "foundational",
+      "aliases": [
+        "power rule",
+        "product rule",
+        "quotient rule",
+        "chain rule",
+        "derivative rules",
+        "differentiating",
+        "how to differentiate",
+        "when derivative fails",
+        "derivative does not exist"
+      ],
+      "prerequisites": [
+        "derivatives"
+      ]
+    },
+    {
+      "id": "critical_points",
+      "label": "Critical Points",
+      "description": "Points where f'(x) = 0 or is undefined. Candidates for local maxima, minima, or saddle points.",
+      "tier": "intermediate",
+      "aliases": [
+        "critical point",
+        "stationary point",
+        "turning point",
+        "sharp point",
+        "corner point",
+        "cusp point",
+        "non-smooth point",
+        "point of non-differentiability",
+        "kink"
+      ],
+      "prerequisites": [
+        "derivatives",
+        "differentiation_rules"
+      ]
+    },
+    {
+      "id": "mean_value_theorem",
+      "label": "Mean Value Theorem",
+      "description": "If f is continuous on [a,b] and differentiable on (a,b), then f'(c) = (f(b)-f(a))/(b-a) for some c.",
+      "tier": "intermediate",
+      "aliases": [
+        "MVT",
+        "mean value theorem",
+        "Lagrange mean value theorem"
+      ],
+      "prerequisites": [
+        "derivatives",
+        "continuity"
+      ]
+    },
+    {
+      "id": "integrals",
+      "label": "Integrals",
+      "description": "The signed area under a curve. Defined as the limit of Riemann sums.",
+      "tier": "foundational",
+      "aliases": [
+        "integral",
+        "integration",
+        "antiderivative",
+        "indefinite integral",
+        "definite integral"
+      ],
+      "prerequisites": [
+        "limits",
+        "functions"
+      ]
+    },
+    {
+      "id": "integration_techniques",
+      "label": "Integration Techniques",
+      "description": "Methods for computing integrals: substitution (u-sub), integration by parts, partial fractions.",
+      "tier": "intermediate",
+      "aliases": [
+        "u-substitution",
+        "u sub",
+        "integration by parts",
+        "partial fractions",
+        "trig substitution"
+      ],
+      "prerequisites": [
+        "integrals",
+        "differentiation_rules"
+      ]
+    },
+    {
+      "id": "fundamental_theorem",
+      "label": "Fundamental Theorem of Calculus",
+      "description": "Connects differentiation and integration: d/dx \u222b[a,x] f(t)dt = f(x). Antiderivatives evaluate definite integrals.",
+      "tier": "intermediate",
+      "aliases": [
+        "FTC",
+        "fundamental theorem",
+        "FTC part 1",
+        "FTC part 2"
+      ],
+      "prerequisites": [
+        "derivatives",
+        "integrals"
+      ]
+    },
+    {
+      "id": "sequences",
+      "label": "Sequences",
+      "description": "An ordered list of numbers defined by a rule. Convergence defined via limits.",
+      "tier": "intermediate",
+      "aliases": [
+        "sequence",
+        "convergent sequence",
+        "divergent sequence"
+      ],
+      "prerequisites": [
+        "limits",
+        "functions"
+      ]
+    },
+    {
+      "id": "series",
+      "label": "Series",
+      "description": "The sum of the terms of a sequence. Convergence tested by ratio test, integral test, comparison test.",
+      "tier": "intermediate",
+      "aliases": [
+        "infinite series",
+        "convergent series",
+        "divergent series",
+        "sum"
+      ],
+      "prerequisites": [
+        "sequences",
+        "limits"
+      ]
+    },
+    {
+      "id": "taylor_series",
+      "label": "Taylor Series",
+      "description": "Power series representation of a function centred at a point: f(x) = \u03a3 f^(n)(a)/n! (x-a)^n.",
+      "tier": "advanced",
+      "aliases": [
+        "Taylor expansion",
+        "Maclaurin series",
+        "Maclaurin expansion",
+        "power series"
+      ],
+      "prerequisites": [
+        "series",
+        "derivatives",
+        "differentiation_rules"
+      ]
+    },
+    {
+      "id": "partial_derivatives",
+      "label": "Partial Derivatives",
+      "description": "The derivative of a multivariable function with respect to one variable, holding others constant.",
+      "tier": "advanced",
+      "aliases": [
+        "partial derivative",
+        "partial differentiation",
+        "\u2202f/\u2202x"
+      ],
+      "prerequisites": [
+        "derivatives",
+        "multivariable_functions"
+      ]
+    },
+    {
+      "id": "multivariable_functions",
+      "label": "Multivariable Functions",
+      "description": "Functions of two or more variables: f(x,y), f(x,y,z). The domain is a subset of \u211d\u207f.",
+      "tier": "intermediate",
+      "aliases": [
+        "multivariable",
+        "multivariate function",
+        "function of several variables",
+        "f(x,y)"
+      ],
+      "prerequisites": [
+        "functions",
+        "derivatives"
+      ]
+    },
+    {
+      "id": "gradient",
+      "label": "Gradient",
+      "description": "Vector of all partial derivatives \u2207f = (\u2202f/\u2202x\u2081, ..., \u2202f/\u2202x\u2099). Points in direction of steepest ascent.",
+      "tier": "advanced",
+      "aliases": [
+        "grad f",
+        "nabla f",
+        "\u2207f",
+        "del f"
+      ],
+      "prerequisites": [
+        "partial_derivatives",
+        "vectors"
+      ]
+    },
+    {
+      "id": "odes",
+      "label": "Ordinary Differential Equations",
+      "description": "Equations relating a function and its derivatives: dy/dx = f(x,y). Solved by separation, integrating factor, etc.",
+      "tier": "advanced",
+      "aliases": [
+        "ODE",
+        "differential equation",
+        "DE",
+        "ordinary differential equation"
+      ],
+      "prerequisites": [
+        "derivatives",
+        "integration_techniques",
+        "fundamental_theorem"
+      ]
+    },
+    {
+      "id": "multivariable_integration",
+      "label": "Multivariable Integration",
+      "description": "Double and triple integrals over regions in \u211d\u00b2 and \u211d\u00b3. Computed by iterated integration.",
+      "tier": "advanced",
+      "aliases": [
+        "double integral",
+        "triple integral",
+        "multiple integral",
+        "iterated integral"
+      ],
+      "prerequisites": [
+        "integrals",
+        "multivariable_functions",
+        "integration_techniques"
+      ]
+    },
+    {
+      "id": "divergence_theorem",
+      "label": "Divergence Theorem",
+      "description": "Relates the flux of a vector field through a closed surface to the divergence inside the volume.",
+      "tier": "expert",
+      "aliases": [
+        "Gauss theorem",
+        "Gauss's theorem",
+        "divergence theorem"
+      ],
+      "prerequisites": [
+        "multivariable_integration",
+        "gradient",
+        "partial_derivatives"
+      ]
+    },
+    {
+      "id": "stokes_theorem",
+      "label": "Stokes' Theorem",
+      "description": "Relates the line integral of a vector field around a closed curve to the surface integral of its curl.",
+      "tier": "expert",
+      "aliases": [
+        "Stokes theorem",
+        "generalised Stokes",
+        "curl theorem"
+      ],
+      "prerequisites": [
+        "multivariable_integration",
+        "gradient",
+        "divergence_theorem"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "functions",
+      "target": "limits",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "functions",
+      "target": "integrals",
+      "relation": "leads_to",
+      "weight": 0.9
+    },
+    {
+      "source": "functions",
+      "target": "multivariable_functions",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "functions",
+      "target": "sequences",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "source": "limits",
+      "target": "continuity",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "limits",
+      "target": "derivatives",
+      "relation": "requires",
+      "weight": 1.0
+    },
+    {
+      "source": "limits",
+      "target": "integrals",
+      "relation": "requires",
+      "weight": 1.0
+    },
+    {
+      "source": "limits",
+      "target": "sequences",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "continuity",
+      "target": "derivatives",
+      "relation": "requires",
+      "weight": 1.0
+    },
+    {
+      "source": "continuity",
+      "target": "mean_value_theorem",
+      "relation": "requires",
+      "weight": 1.0
+    },
+    {
+      "source": "derivatives",
+      "target": "differentiation_rules",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "derivatives",
+      "target": "critical_points",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "derivatives",
+      "target": "fundamental_theorem",
+      "relation": "requires",
+      "weight": 1.0
+    },
+    {
+      "source": "derivatives",
+      "target": "mean_value_theorem",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "derivatives",
+      "target": "taylor_series",
+      "relation": "requires",
+      "weight": 1.0
+    },
+    {
+      "source": "derivatives",
+      "target": "partial_derivatives",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "derivatives",
+      "target": "odes",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "differentiation_rules",
+      "target": "integration_techniques",
+      "relation": "leads_to",
+      "weight": 0.9
+    },
+    {
+      "source": "differentiation_rules",
+      "target": "taylor_series",
+      "relation": "requires",
+      "weight": 1.0
+    },
+    {
+      "source": "integrals",
+      "target": "integration_techniques",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "integrals",
+      "target": "fundamental_theorem",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "integrals",
+      "target": "multivariable_integration",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "integration_techniques",
+      "target": "odes",
+      "relation": "requires",
+      "weight": 1.0
+    },
+    {
+      "source": "integration_techniques",
+      "target": "multivariable_integration",
+      "relation": "requires",
+      "weight": 0.9
+    },
+    {
+      "source": "fundamental_theorem",
+      "target": "integration_techniques",
+      "relation": "leads_to",
+      "weight": 0.9
+    },
+    {
+      "source": "fundamental_theorem",
+      "target": "odes",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "source": "sequences",
+      "target": "series",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "series",
+      "target": "taylor_series",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "multivariable_functions",
+      "target": "partial_derivatives",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "multivariable_functions",
+      "target": "multivariable_integration",
+      "relation": "requires",
+      "weight": 1.0
+    },
+    {
+      "source": "partial_derivatives",
+      "target": "gradient",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "partial_derivatives",
+      "target": "divergence_theorem",
+      "relation": "requires",
+      "weight": 0.9
+    },
+    {
+      "source": "gradient",
+      "target": "divergence_theorem",
+      "relation": "requires",
+      "weight": 1.0
+    },
+    {
+      "source": "gradient",
+      "target": "stokes_theorem",
+      "relation": "requires",
+      "weight": 1.0
+    },
+    {
+      "source": "multivariable_integration",
+      "target": "divergence_theorem",
+      "relation": "leads_to",
+      "weight": 1.0
+    },
+    {
+      "source": "divergence_theorem",
+      "target": "stokes_theorem",
+      "relation": "leads_to",
+      "weight": 1.0
+    }
+  ]
+}
