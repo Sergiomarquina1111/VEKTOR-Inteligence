@@ -102,7 +102,7 @@ async def _call_gemini(query: str) -> dict:
 
     response = await asyncio.to_thread(
         client.models.generate_content,
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-lite",
         contents=full_prompt,
     )
 

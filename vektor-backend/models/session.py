@@ -6,10 +6,10 @@ from enum import Enum
 # ─── Enums ────────────────────────────────────────────────────────────────────
 
 class KnowledgeTier(str, Enum):
-    T1 = "T1"  # Aligned
-    T2 = "T2"  # Gap / Incomplete
-    T3 = "T3"  # Misconception
-    T4 = "T4"  # Fragmented / Unknown
+    T1 = "T1"
+    T2 = "T2"
+    T3 = "T3"
+    T4 = "T4"
 
 
 class TierLabel(str, Enum):
@@ -22,38 +22,37 @@ class TierLabel(str, Enum):
 # ─── Inbound ──────────────────────────────────────────────────────────────────
 
 class SessionAnalyzeRequest(BaseModel):
-    query: str = Field(..., min_length=3, max_length=2000, description="Student's STEM question or explanation")
-    subject: Optional[str] = Field(None, description="Override subject detection. One of: mathematics, physics, chemistry, biology, computer_science")
-    userId: str = Field(..., description="Firebase Auth UID")
-    classId: Optional[str] = Field(None, description="Class ID if student is enrolled")
-    dkgVersion: Optional[str] = Field(None, description="Pin to a specific DKG version. Uses latest if omitted.")
+    query:      str           = Field(..., min_length=3, max_length=2000)
+    subject:    Optional[str] = Field(None)
+    userId:     str           = Field(...)
+    classId:    Optional[str] = Field(None)
+    dkgVersion: Optional[str] = Field(None)
 
 
 # ─── Knowledge Graph ──────────────────────────────────────────────────────────
 
 class GraphNode(BaseModel):
-    id: str
-    label: str
-    tier: Optional[str] = None          # DKG tier: foundational / intermediate / advanced / expert
-    matched_dkg_id: Optional[str] = None
+    id:               str
+    label:            str
+    tier:             Optional[str]   = None
+    matched_dkg_id:   Optional[str]   = None
     similarity_score: Optional[float] = None
 
 
 class DKGNode(BaseModel):
-    """A node from the Domain Knowledge Graph — sent to frontend for visualisation."""
-    id: str
-    label: str
-    tier: str                            # foundational / intermediate / advanced / expert
-    description: str
-    prerequisites: list[str] = []        # list of node IDs
-    is_matched: bool = False             # true if any SKG node matched this DKG node
-    match_status: str = "unvisited"      # aligned | gap | misconception | unvisited
+    id:            str
+    label:         str
+    tier:          str
+    description:   str
+    prerequisites: list[str] = []
+    is_matched:    bool       = False
+    match_status:  str        = "unvisited"
 
 
 class GraphEdge(BaseModel):
-    source: str
-    target: str
-    relation: str
+    source:          str
+    target:          str
+    relation:        str
     contradicts_dkg: bool = False
 
 
@@ -70,82 +69,96 @@ class DKGGraph(BaseModel):
 # ─── Analysis Results ─────────────────────────────────────────────────────────
 
 class GapItem(BaseModel):
-    concept: str
+    concept:     str
     dkg_node_id: str
     description: str
-    priority: str  # high | medium | low
+    priority:    str
 
 
 class MisconceptionItem(BaseModel):
-    concept: str
-    student_belief: str
+    concept:               str
+    student_belief:        str
     correct_understanding: str
-    dkg_node_id: str
+    dkg_node_id:           str
 
 
 class AdaptivePathItem(BaseModel):
-    concept: str
-    reason: str
-    priority: str  # high | medium | low
+    concept:    str
+    reason:     str
+    priority:   str
     blocked_by: Optional[str] = None
 
 
 class GraphMetrics(BaseModel):
-    node_coverage: float
-    edge_alignment: float
-    contradiction_rate: float
-    prereq_chain_coverage: float
-    concept_depth: float
+    node_coverage:          float
+    edge_alignment:         float
+    contradiction_rate:     float
+    prereq_chain_coverage:  float
+    concept_depth:          float
     missing_critical_nodes: list[str]
-    weighted_alignment: float
+    weighted_alignment:     float
 
 
 # ─── Simulation ───────────────────────────────────────────────────────────────
 
-class SimulationParams(BaseModel):
-    template: str                     # orbital | wave | force | transform | graph_plot | sort | ...
-    studentParams: dict               # parameters matching student's described understanding
-    correctParams: dict               # parameters matching scientifically correct understanding
-    narration: str                    # 1-2 sentences shown during the phase transition
-    deltaKeys: list[str]              # which param keys differ between student and correct
+class SimulationDelta(BaseModel):
+    """
+    One parameter that differs between student model and expert model.
+    UI labels: "YOUR MODEL" / "EXPERT MODEL" — never "wrong" / "correct".
+    """
+    key:          str
+    label:        str
+    studentValue: str
+    expertValue:  str
 
 
 class SimulationResponse(BaseModel):
-    simulatable: bool
-    simulationHint: Optional[str] = None   # orbital | wave | force | transform | graph_plot | sort | ...
-    simulation: Optional[SimulationParams] = None
+    """
+    Populated by simulator.py after session analysis.
+    simulatable=False  → hide SIMULATE button.
+    simulatable=True   → show SIMULATE button, pass params to WebGL2 engine.
+
+    studentParams: extracted from student's answer  (label: "YOUR MODEL")
+    expertParams:  domain-correct parameters        (label: "EXPERT MODEL")
+    """
+    simulatable:    bool                  = False
+    simulationHint: Optional[str]         = None
+    label:          Optional[str]         = None
+    studentParams:  dict                  = Field(default_factory=dict)
+    expertParams:   dict                  = Field(default_factory=dict)
+    deltas:         list[SimulationDelta] = Field(default_factory=list)
 
 
 # ─── Full Session Response ────────────────────────────────────────────────────
 
 class SessionAnalyzeResponse(BaseModel):
-    sessionId: str
-    userId: str
-    subject: str
+    sessionId:         str
+    userId:            str
+    subject:           str
     subjectConfidence: float
-    tier: KnowledgeTier
-    tierLabel: str
-    tierScore: float                  # 0.0–1.0 alignment score
-    query: str
-    skg: KnowledgeGraph               # Student Knowledge Graph
-    dkg: DKGGraph                     # Domain Knowledge Graph — relevant nodes only
-    metrics: GraphMetrics
-    gaps: list[GapItem]
-    misconceptions: list[MisconceptionItem]
-    explanation: str                  # AI-generated explanation of the gap
-    adaptivePath: list[AdaptivePathItem]
-    simulation: SimulationResponse
-    dkgVersion: str
-    dkgNodeCount: int
-    processingTimeMs: int
+    tier:              KnowledgeTier
+    tierLabel:         str
+    tierScore:         float
+    query:             str
+    skg:               KnowledgeGraph
+    dkg:               DKGGraph
+    metrics:           GraphMetrics
+    gaps:              list[GapItem]
+    misconceptions:    list[MisconceptionItem]
+    explanation:       str
+    adaptivePath:      list[AdaptivePathItem]
+    simulation:        SimulationResponse
+    dkgVersion:        str
+    dkgNodeCount:      int
+    processingTimeMs:  int
 
 
-# ─── Health Check ─────────────────────────────────────────────────────────────
+# ─── Health ───────────────────────────────────────────────────────────────────
 
 class HealthResponse(BaseModel):
-    status: str                       # ok | degraded | error
-    environment: str
-    gemini_available: bool
+    status:                      str
+    environment:                 str
+    gemini_available:            bool
     sentence_transformer_loaded: bool
-    dkgs_loaded: list[str]
-    version: str = "1.0.0"
+    dkgs_loaded:                 list[str]
+    version:                     str = "1.0.0"
