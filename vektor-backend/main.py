@@ -29,6 +29,7 @@ from models.session import (
     DKGGraph,
     DKGNode,
     SimulationResponse,
+    SimulationDelta,
 )
 from services import (
     extract_triples,
@@ -49,10 +50,11 @@ from services import (
     gemini_available,
 )
 
+from services.simulator import extract_simulation_params, SUBJECT_DEFAULT_HINT as SIM_DEFAULT_HINTS
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# ─── Rate limiting (in-memory, Phase 1) ──────────────────────────────────────
 _session_counts: dict[str, int] = {}
 FREE_TIER_DAILY_LIMIT = 5
 
@@ -78,8 +80,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ─── CORS ─────────────────────────────────────────────────────────────────────
-
 allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")]
 app.add_middleware(
     CORSMiddleware,
@@ -90,14 +90,9 @@ app.add_middleware(
 )
 
 
-# ─── Auth dependency ──────────────────────────────────────────────────────────
+# ─── Auth ──────────────────────────────────────────────────────────────────────
 
 async def verify_firebase_token(request: Request) -> str:
-    """
-    Verify Firebase Auth JWT.
-    Development: any non-empty Bearer token accepted as uid.
-    Production: uncomment Firebase Admin SDK block below.
-    """
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or malformed Authorization header")
@@ -116,7 +111,7 @@ async def verify_firebase_token(request: Request) -> str:
     # except Exception as e:
     #     raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
 
-    return token  # remove this line when uncommenting above
+    return token
 
 
 # ─── Rate limiter ─────────────────────────────────────────────────────────────
@@ -154,15 +149,6 @@ async def session_analyze(
     body: SessionAnalyzeRequest,
     uid: str = Depends(verify_firebase_token),
 ):
-    """
-    Core endpoint — full RAG-enhanced 5-layer analysis pipeline.
-
-    Layer 1: Extract triples (Gemini)
-    Layer 2: Build SKG, load DKG, semantic match via sentence-transformers
-    Layer 3: 6 comparison metrics, T1–T4 classification
-    Layer 4: RAG context built from matched DKG nodes → injected into Gemini explanation prompt
-    Layer 5: Return complete SessionAnalyzeResponse including full DKG subgraph
-    """
     start_time = time.time()
     session_id = str(uuid.uuid4())
     logger.info("Session %s started uid=%s query=%.60s...", session_id, uid, body.query)
@@ -170,16 +156,15 @@ async def session_analyze(
     check_rate_limit(uid)
 
     # ── Layer 1: Triple extraction ────────────────────────────────────────────
-    extraction = await extract_triples(body.query, subject_override=body.subject)
+    extraction         = await extract_triples(body.query, subject_override=body.subject)
     subject            = extraction["subject"]
     triples            = extraction["triples"]
     subject_confidence = extraction["subjectConfidence"]
-    simulatable        = extraction.get("simulatable", False)
-    simulation_hint    = extraction.get("simulationHint")
-    logger.info("Session %s: subject=%s %d triples extracted simulatable=%s hint=%s",
-                session_id, subject, len(triples), simulatable, simulation_hint)
+    simulation_hint    = extraction.get("simulationHint")  # optional hint from extractor
+    logger.info("Session %s: subject=%s triples=%d hint=%s",
+                session_id, subject, len(triples), simulation_hint)
 
-    # ── Layer 2: Build SKG + load DKG + semantic match ────────────────────────
+    # ── Layer 2: Build SKG + DKG + semantic match ─────────────────────────────
     skg_nx = build_skg(triples)
 
     dkg_result = get_dkg_for_subject(subject)
@@ -192,7 +177,7 @@ async def session_analyze(
         dkg_raw, dkg_nx = dkg_result
 
     skg_to_dkg = match_skg_to_dkg(skg_nx, subject)
-    sim_scores = get_similarity_scores(skg_nx, subject)
+    sim_scores  = get_similarity_scores(skg_nx, subject)
 
     # ── Layer 3: Compare + classify ───────────────────────────────────────────
     metrics        = compare_graphs(skg_nx, dkg_nx, skg_to_dkg)
@@ -211,6 +196,49 @@ async def session_analyze(
         skg_to_dkg=skg_to_dkg,
         dkg=dkg_nx,
     )
+
+    # ── Layer 5: Simulation parameters ───────────────────────────────────────
+    # Runs for every query that produced at least 1 SKG node.
+    # No longer gated on triple extractor flags — those were unreliable.
+    # The hint is resolved here: use extractor hint if present, else subject default.
+    # Non-blocking: if this fails the session still returns with simulatable=False.
+    simulation_response = SimulationResponse(simulatable=False)
+
+    resolved_hint = simulation_hint or SIM_DEFAULT_HINTS.get(subject, "generic")
+
+    if len(skg_nx.nodes) >= 1:
+        try:
+            sim_data = await extract_simulation_params(
+                query=body.query,
+                subject=subject,
+                hint=resolved_hint,
+                triples=triples,
+                tier=tier,
+            )
+            if sim_data.get("simulatable"):
+                simulation_response = SimulationResponse(
+                    simulatable=True,
+                    simulationHint=sim_data.get("hint", resolved_hint),
+                    label=sim_data.get("label"),
+                    studentParams=sim_data.get("studentParams", {}),
+                    expertParams=sim_data.get("expertParams", {}),
+                    deltas=[
+                        SimulationDelta(
+                            key=d["key"],
+                            label=d["label"],
+                            studentValue=d["studentValue"],
+                            expertValue=d["expertValue"],
+                        )
+                        for d in sim_data.get("deltas", [])
+                    ],
+                )
+                logger.info("Session %s: simulation ready hint=%s deltas=%d",
+                            session_id, simulation_response.simulationHint,
+                            len(simulation_response.deltas))
+            else:
+                logger.info("Session %s: simulation returned simulatable=False", session_id)
+        except Exception as e:
+            logger.warning("Session %s: simulation extraction failed: %s", session_id, e)
 
     # ── Build SKG response ────────────────────────────────────────────────────
     skg_nodes = [
@@ -233,18 +261,13 @@ async def session_analyze(
         for src, tgt, data in skg_nx.edges(data=True)
     ]
 
-    # ── Build DKG response subgraph ───────────────────────────────────────────
-    # Include: all matched DKG nodes + their 1-hop neighbours + missing critical nodes
-    matched_dkg_ids = {v for v in skg_to_dkg.values() if v is not None}
-    missing_critical_ids = {
-        _label_to_id(label, dkg_nx)
-        for label in metrics.missing_critical_nodes
-    }
-    misconception_dkg_ids = {m.dkg_node_id for m in misconceptions}
-    gap_dkg_ids = {g.dkg_node_id for g in gaps if g.dkg_node_id != "unmatched"}
+    # ── Build DKG subgraph ────────────────────────────────────────────────────
+    matched_dkg_ids      = {v for v in skg_to_dkg.values() if v is not None}
+    missing_critical_ids = {_label_to_id(l, dkg_nx) for l in metrics.missing_critical_nodes}
+    misconception_ids    = {m.dkg_node_id for m in misconceptions}
+    gap_ids              = {g.dkg_node_id for g in gaps if g.dkg_node_id != "unmatched"}
 
-    # Expand to include 1-hop prereqs so the graph shows context
-    expanded_ids = set(matched_dkg_ids) | missing_critical_ids | misconception_dkg_ids | gap_dkg_ids
+    expanded_ids = set(matched_dkg_ids) | missing_critical_ids | misconception_ids | gap_ids
     for node_id in list(matched_dkg_ids):
         if node_id in dkg_nx:
             for prereq in dkg_nx.predecessors(node_id):
@@ -252,18 +275,16 @@ async def session_analyze(
             for successor in dkg_nx.successors(node_id):
                 expanded_ids.add(successor)
 
-    # Build DKG nodes list
     dkg_nodes_response: list[DKGNode] = []
     for node_id in expanded_ids:
         if node_id not in dkg_nx:
             continue
-        node_data = dkg_nx.nodes[node_id]
+        node_data  = dkg_nx.nodes[node_id]
         is_matched = node_id in matched_dkg_ids
 
-        # Determine match status for this DKG node
-        if node_id in misconception_dkg_ids:
+        if node_id in misconception_ids:
             match_status = "misconception"
-        elif node_id in gap_dkg_ids or node_id in missing_critical_ids:
+        elif node_id in gap_ids or node_id in missing_critical_ids:
             match_status = "gap"
         elif is_matched:
             match_status = "aligned"
@@ -280,25 +301,16 @@ async def session_analyze(
             match_status=match_status,
         ))
 
-    # Build DKG edges — only edges between nodes we're including
     included_ids = {n.id for n in dkg_nodes_response}
     dkg_edges_response = [
-        GraphEdge(
-            source=src,
-            target=tgt,
-            relation=data.get("relation", "leads_to"),
-            contradicts_dkg=False,
-        )
+        GraphEdge(source=src, target=tgt, relation=data.get("relation", "leads_to"), contradicts_dkg=False)
         for src, tgt, data in dkg_nx.edges(data=True)
         if src in included_ids and tgt in included_ids
     ]
 
     elapsed_ms = int((time.time() - start_time) * 1000)
-    logger.info("Session %s complete in %dms — SKG:%d nodes, DKG:%d nodes",
+    logger.info("Session %s complete in %dms — SKG:%d DKG:%d",
                 session_id, elapsed_ms, len(skg_nodes), len(dkg_nodes_response))
-
-    # TODO Session 9: write session to Firestore from backend
-    # await save_session_to_firestore(session_id, uid, body.classId, ...)
 
     return SessionAnalyzeResponse(
         sessionId=session_id,
@@ -316,10 +328,7 @@ async def session_analyze(
         misconceptions=misconceptions,
         explanation=explanation,
         adaptivePath=adaptive_path,
-        simulation=SimulationResponse(
-            simulatable=simulatable,
-            simulationHint=simulation_hint,
-        ),
+        simulation=simulation_response,
         dkgVersion=dkg_raw.get("version", "unknown"),
         dkgNodeCount=dkg_raw.get("nodeCount", 0),
         processingTimeMs=elapsed_ms,
@@ -330,7 +339,6 @@ async def session_analyze(
 
 @app.websocket("/ws/stream")
 async def ws_stream(websocket: WebSocket):
-    """Stream explanation token by token. Phase 2: replace with true Gemini streaming."""
     await websocket.accept()
     try:
         import asyncio as _asyncio
@@ -350,7 +358,6 @@ async def ws_stream(websocket: WebSocket):
 
 @app.websocket("/ws/tutor")
 async def ws_tutor(websocket: WebSocket):
-    """Pro-only Socratic tutor. Phase 2: full Gemini streaming."""
     await websocket.accept()
     try:
         import asyncio as _asyncio
@@ -376,7 +383,6 @@ async def ws_tutor(websocket: WebSocket):
 
 @app.get("/api/dkg/{subject}")
 async def get_dkg(subject: str, uid: str = Depends(verify_firebase_token)):
-    """Return the DKG JSON for a subject. Used by the Researcher Portal."""
     result = get_dkg_for_subject(subject)
     if result is None:
         raise HTTPException(status_code=404, detail=f"No DKG found for subject: {subject}")
@@ -410,8 +416,7 @@ def _is_contradiction(src: str, tgt: str, skg_to_dkg: dict, dkg_nx) -> bool:
 
 
 def _label_to_id(label: str, dkg_nx) -> str:
-    """Reverse lookup: find a node ID by its label."""
     for node_id, data in dkg_nx.nodes(data=True):
         if data.get("label", "").lower() == label.lower():
             return node_id
-    return label  # fallback to label itself
+    return label

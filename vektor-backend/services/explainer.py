@@ -132,7 +132,7 @@ async def _call_gemini_explain(prompt_context: str) -> dict:
     full_prompt = f"{_EXPLANATION_PROMPT}\n\n{prompt_context}"
     response = await asyncio.to_thread(
         client.models.generate_content,
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-lite",
         contents=full_prompt,
     )
     return json.loads(_clean_json(response.text))

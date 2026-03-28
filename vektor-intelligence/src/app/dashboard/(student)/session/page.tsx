@@ -1,28 +1,42 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authstore";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-// ── Types ──────────────────────────────────────────────────────────
+// ── WebGL2 simulation engine ──────────────────────────────────────
+import { SimulationModal } from "@/simulation";
+import type { SimulationData, SimParams } from "@/simulation";
+import { SUBJECT_DEFAULT_HINT } from "@/simulation";
+
+// ══════════════════════════════════════════════════════════════════
+// TYPES
+// ══════════════════════════════════════════════════════════════════
 type Tier = "T1" | "T2" | "T3" | "T4" | null;
 
 interface GraphNode {
-  id:     string;
-  label:  string;
-  x:      number;
-  y:      number;
-  status: "aligned" | "gap" | "misconception" | "unvisited" | "unknown";
+  id:          string;
+  label:       string;
+  x:           number;
+  y:           number;
+  status:      "aligned" | "gap" | "misconception" | "unvisited" | "unknown";
+  // enriched from DKG
+  tier?:        string;
+  description?: string;
+  prerequisites?: string[];
+  is_matched?:  boolean;
+  similarity_score?: number;
+  matched_dkg_id?:   string;
 }
 interface GraphEdge {
   from:   string;
   to:     string;
   status: "correct" | "wrong" | "missing";
+  relation?: string;
 }
 
-// ── Real API shapes ────────────────────────────────────────────────
 interface ApiGapItem {
   concept:     string;
   dkg_node_id: string;
@@ -63,6 +77,20 @@ interface ApiAdaptivePathItem {
   priority:    string;
   blocked_by?: string;
 }
+interface ApiSimulationDelta {
+  key:          string;
+  label:        string;
+  studentValue: string;
+  expertValue:  string;
+}
+interface ApiSimulation {
+  simulatable:     boolean;
+  simulationHint?: string;
+  label?:          string;
+  studentParams:   Record<string, unknown>;
+  expertParams:    Record<string, unknown>;
+  deltas:          ApiSimulationDelta[];
+}
 interface ApiResponse {
   sessionId:         string;
   userId:            string;
@@ -87,12 +115,11 @@ interface ApiResponse {
   misconceptions:   ApiMisconceptionItem[];
   explanation:      string;
   adaptivePath:     ApiAdaptivePathItem[];
-  simulation:       { simulatable: boolean; simulationHint?: string };
+  simulation:       ApiSimulation;
   dkgVersion:       string;
   dkgNodeCount:     number;
   processingTimeMs: number;
 }
-
 interface SessionResult {
   tier:             Tier;
   tierLabel:        string;
@@ -108,19 +135,19 @@ interface SessionResult {
   aligned:          number;
   adaptivePath:     ApiAdaptivePathItem[];
   metrics:          ApiResponse["metrics"] | null;
-  simulatable:      boolean;
-  simulationHint:   string | null;
+  simulationData:   SimulationData | null;
   dkgVersion:       string;
   processingTimeMs: number;
 }
-
 interface ChatMessage {
   role:       "user" | "ai";
   content:    string;
   streaming?: boolean;
 }
 
-// ── Constants ──────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════════════════════════
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const SUBJECT_COLORS: Record<string, string> = {
@@ -140,10 +167,10 @@ const SUBJECT_LABELS: Record<string, string> = {
 const SUBJECTS = Object.keys(SUBJECT_COLORS);
 
 const TIER_CONFIG = {
-  T1: { color: "#C8FF00", label: "Aligned",      bg: "#C8FF0010", desc: "Your understanding matches the expert model."                          },
-  T2: { color: "#FFB800", label: "Gap",           bg: "#FFB80010", desc: "You understand the surface but are missing key connections."            },
-  T3: { color: "#FF3D57", label: "Misconception", bg: "#FF3D5710", desc: "Your mental model has a structural error blocking downstream concepts." },
-  T4: { color: "#7B5CFF", label: "Fragmented",    bg: "#7B5CFF10", desc: "Not enough conceptual structure to map your understanding."             },
+  T1: { color: "#C8FF00", label: "Aligned",       bg: "#C8FF0010", desc: "Your understanding matches the expert model."                                        },
+  T2: { color: "#FFB800", label: "Gap",            bg: "#FFB80010", desc: "You understand the surface but are missing key connections."                         },
+  T3: { color: "#FF3D57", label: "Misconception",  bg: "#FF3D5710", desc: "Your mental model has a structural difference from the expert model."                },
+  T4: { color: "#7B5CFF", label: "Fragmented",     bg: "#7B5CFF10", desc: "Not enough conceptual structure to map your understanding."                          },
 };
 const STAGE_BG: Record<string, string> = {
   T1:   "radial-gradient(ellipse at 50% 100%, #C8FF0008 0%, #08080F 60%)",
@@ -152,68 +179,114 @@ const STAGE_BG: Record<string, string> = {
   T4:   "radial-gradient(ellipse at 50% 100%, #7B5CFF10 0%, #08080F 60%)",
   none: "none",
 };
-const SIMULATION_HINT_LABELS: Record<string, string> = {
-  orbital:         "Orbital Mechanics",
-  wave:            "Wave Behaviour",
-  force:           "Force Diagram",
-  transform:       "Matrix Transform",
-  graph_plot:      "Graph / Function",
-  geometry:        "Geometry",
-  sort:            "Sorting Algorithm",
-  graph_traversal: "Graph Traversal",
-  molecular:       "Molecular Structure",
-  reaction:        "Chemical Reaction",
+
+const NODE_STATUS_COLOR = (status: GraphNode["status"], subjectColor: string) => {
+  switch (status) {
+    case "aligned":       return subjectColor;
+    case "gap":           return "#FFB800";
+    case "misconception": return "#FF3D57";
+    case "unknown":       return "#6B6A80";
+    default:              return "#3A3A5C";
+  }
 };
 
-// ── Layout helpers ─────────────────────────────────────────────────
-function layoutNodes(nodes: { id: string; label: string; status: GraphNode["status"] }[]): GraphNode[] {
+const TIER_NODE_LABEL: Record<string, string> = {
+  foundational:  "Foundational",
+  intermediate:  "Intermediate",
+  advanced:      "Advanced",
+  expert:        "Expert",
+};
+
+// ══════════════════════════════════════════════════════════════════
+// LAYOUT HELPERS
+// ══════════════════════════════════════════════════════════════════
+function layoutNodes(nodes: GraphNode[]): GraphNode[] {
   const cols = Math.max(2, Math.ceil(Math.sqrt(nodes.length)));
+  const padX = 80, padY = 70, spacingX = 110, spacingY = 95;
   return nodes.map((n, i) => ({
-    id:     n.id,
-    label:  n.label,
-    x:      70 + (i % cols) * 100,
-    y:      60 + Math.floor(i / cols) * 90,
-    status: n.status,
+    ...n,
+    x: padX + (i % cols) * spacingX,
+    y: padY + Math.floor(i / cols) * spacingY,
   }));
 }
 
-// ── Map ApiResponse → SessionResult ───────────────────────────────
+function mapSimulationData(sim: ApiSimulation, subject: string): SimulationData | null {
+  if (!sim?.simulatable) return null;
+  const hint = (sim.simulationHint ?? SUBJECT_DEFAULT_HINT[subject] ?? "generic") as SimulationData["hint"];
+  return {
+    hint,
+    subject,
+    label:         sim.label ?? hint,
+    studentParams: sim.studentParams as Record<string, SimParams[string]> ?? {},
+    expertParams:  sim.expertParams  as Record<string, SimParams[string]> ?? {},
+    deltas: (sim.deltas ?? []).map(d => ({
+      key:          d.key,
+      label:        d.label,
+      studentValue: d.studentValue,
+      expertValue:  d.expertValue,
+    })),
+  };
+}
+
 function mapApiResponse(data: ApiResponse): SessionResult {
   const contradictingSources = new Set(
     (data.skg?.edges || []).filter(e => e.contradicts_dkg).map(e => e.source)
   );
+
+  // Build DKG lookup for enriching SKG nodes
+  const dkgNodeMap: Record<string, ApiDKGNode> = {};
+  (data.dkg?.nodes || []).forEach(n => { dkgNodeMap[n.id] = n; });
+
   const skgNodes = layoutNodes(
-    (data.skg?.nodes || []).map(n => ({
-      id:     n.id,
-      label:  n.label,
-      status: contradictingSources.has(n.id)
-        ? "misconception"
-        : n.matched_dkg_id
-          ? (n.similarity_score && n.similarity_score >= 0.72 ? "aligned" : "gap")
-          : "unknown",
-    }))
+    (data.skg?.nodes || []).map(n => {
+      const dkgNode = n.matched_dkg_id ? dkgNodeMap[n.matched_dkg_id] : null;
+      return {
+        id:              n.id,
+        label:           n.label,
+        x: 0, y: 0,
+        status: (contradictingSources.has(n.id)
+          ? "misconception"
+          : n.matched_dkg_id
+            ? (n.similarity_score && n.similarity_score >= 0.45 ? "aligned" : "gap")
+            : "unknown") as GraphNode["status"],
+        tier:             dkgNode?.tier,
+        description:      dkgNode?.description,
+        prerequisites:    dkgNode?.prerequisites,
+        similarity_score: n.similarity_score,
+        matched_dkg_id:   n.matched_dkg_id,
+        is_matched:       !!n.matched_dkg_id,
+      };
+    })
   );
+
   const skgEdges: GraphEdge[] = (data.skg?.edges || []).map(e => ({
-    from:   e.source,
-    to:     e.target,
-    status: e.contradicts_dkg ? "wrong" : "correct",
+    from:     e.source,
+    to:       e.target,
+    status:   e.contradicts_dkg ? "wrong" : "correct",
+    relation: e.relation,
   }));
 
-  // ── DKG — real nodes from backend ────────────────────────────
   const dkgNodes = layoutNodes(
     (data.dkg?.nodes || []).map(n => ({
-      id:     n.id,
-      label:  n.label,
-      status: n.match_status === "aligned"       ? "aligned"
-            : n.match_status === "misconception" ? "misconception"
-            : n.match_status === "gap"           ? "gap"
-            : "unvisited",
+      id:            n.id,
+      label:         n.label,
+      x: 0, y: 0,
+      status: (n.match_status === "aligned"       ? "aligned"
+             : n.match_status === "misconception" ? "misconception"
+             : n.match_status === "gap"           ? "gap"
+             : "unvisited") as GraphNode["status"],
+      tier:          n.tier,
+      description:   n.description,
+      prerequisites: n.prerequisites,
+      is_matched:    n.is_matched,
     }))
   );
+
   const dkgEdges: GraphEdge[] = (data.dkg?.edges || []).map(e => ({
-    from:   e.source,
-    to:     e.target,
-    status: "correct" as const,
+    from:     e.source,
+    to:       e.target,
+    status:   "correct" as const,
+    relation: e.relation,
   }));
 
   const gaps: ApiGapItem[] = (data.gaps || []).map(g =>
@@ -242,14 +315,12 @@ function mapApiResponse(data: ApiResponse): SessionResult {
     aligned:          skgNodes.filter(n => n.status === "aligned").length,
     adaptivePath:     data.adaptivePath || [],
     metrics:          data.metrics || null,
-    simulatable:      data.simulation?.simulatable ?? false,
-    simulationHint:   data.simulation?.simulationHint ?? null,
+    simulationData:   mapSimulationData(data.simulation, data.subject),
     dkgVersion:       data.dkgVersion || "1.0.0",
     processingTimeMs: data.processingTimeMs || 0,
   };
 }
 
-// ── Save session to Firestore ──────────────────────────────────────
 async function saveSession(
   userId: string, classId: string | undefined,
   subject: string, query: string, result: SessionResult,
@@ -266,83 +337,376 @@ async function saveSession(
 }
 
 // ══════════════════════════════════════════════════════════════════
-// GRAPH PANEL
+// NODE DETAIL DRAWER
 // ══════════════════════════════════════════════════════════════════
-function GraphPanel({ title, nodes, edges, subjectColor, animate, emptyLabel }: {
-  title: string; nodes: GraphNode[]; edges: GraphEdge[];
-  subjectColor: string; animate: boolean; emptyLabel?: string;
+function NodeDetailDrawer({
+  node,
+  panelTitle,
+  subjectColor,
+  onClose,
+  allNodes,
+}: {
+  node: GraphNode;
+  panelTitle: string;
+  subjectColor: string;
+  onClose: () => void;
+  allNodes: GraphNode[];
 }) {
-  const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
-  const nodeColor = (s: GraphNode["status"]) => {
-    switch (s) {
-      case "aligned":       return subjectColor;
-      case "gap":           return "#FFB800";
-      case "misconception": return "#FF3D57";
-      default:              return "#3A3A5C";
-    }
-  };
-  const edgeColor = (s: GraphEdge["status"]) =>
-    s === "wrong" ? "#FF3D57" : s === "missing" ? "#FF6B6B40" : `${subjectColor}60`;
+  const statusColor = NODE_STATUS_COLOR(node.status, subjectColor);
+  const statusLabel = {
+    aligned:       "Aligned with expert model",
+    gap:           "Gap — needs strengthening",
+    misconception: "Misconception — structural error",
+    unvisited:     "Not yet covered",
+    unknown:       "No DKG match found",
+  }[node.status];
+
+  // Resolve prerequisite labels from allNodes
+  const prereqNodes = (node.prerequisites || [])
+    .map(id => allNodes.find(n => n.id === id))
+    .filter(Boolean) as GraphNode[];
 
   return (
-    <div className="flex flex-col h-full" style={{ border: "1px solid #1E1E36", backgroundColor: "#0F0F1A" }}>
+    <div
+      className="absolute inset-y-0 right-0 z-20 flex flex-col"
+      style={{
+        width: 280,
+        backgroundColor: "#0A0A14",
+        borderLeft: `1px solid ${statusColor}30`,
+        boxShadow: `-8px 0 32px ${statusColor}10`,
+        animation: "slideInRight 0.2s ease",
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between p-4 flex-shrink-0"
+        style={{ borderBottom: `1px solid ${statusColor}20` }}>
+        <div className="flex-1 min-w-0 mr-2">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-2 h-2 rounded-full flex-shrink-0"
+              style={{ backgroundColor: statusColor }} />
+            <span className="text-xs tracking-widest uppercase"
+              style={{ color: statusColor, fontFamily: "var(--font-dm-mono)" }}>
+              {panelTitle}
+            </span>
+          </div>
+          <h3 className="text-sm font-black leading-tight"
+            style={{ color: "#F0F0FF", fontFamily: "var(--font-syne)", wordBreak: "break-word" }}>
+            {node.label}
+          </h3>
+        </div>
+        <button onClick={onClose}
+          className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs"
+          style={{ color: "#3A3A5C", border: "1px solid #1E1E36" }}
+          onMouseEnter={e => (e.currentTarget.style.color = "#FF3D57")}
+          onMouseLeave={e => (e.currentTarget.style.color = "#3A3A5C")}>✕</button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+        {/* Status badge */}
+        <div className="flex items-center gap-2 px-3 py-2"
+          style={{ backgroundColor: `${statusColor}10`, border: `1px solid ${statusColor}25` }}>
+          <span className="text-xs" style={{ color: statusColor, fontFamily: "var(--font-dm-mono)" }}>
+            {statusLabel}
+          </span>
+        </div>
+
+        {/* Tier */}
+        {node.tier && (
+          <div>
+            <div className="text-xs tracking-widest uppercase mb-1.5"
+              style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>Depth Level</div>
+            <div className="flex items-center gap-2">
+              <div className="px-2 py-0.5 text-xs"
+                style={{
+                  backgroundColor: "#16162A",
+                  border: "1px solid #1E1E36",
+                  color: "#6B6A80",
+                  fontFamily: "var(--font-dm-mono)",
+                }}>
+                {TIER_NODE_LABEL[node.tier] ?? node.tier}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Similarity score (SKG nodes) */}
+        {node.similarity_score !== undefined && (
+          <div>
+            <div className="text-xs tracking-widest uppercase mb-1.5"
+              style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>Match Score</div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1" style={{ backgroundColor: "#1E1E36" }}>
+                <div className="h-full transition-all"
+                  style={{ width: `${Math.round(node.similarity_score * 100)}%`, backgroundColor: statusColor }} />
+              </div>
+              <span className="text-xs font-black"
+                style={{ color: statusColor, fontFamily: "var(--font-dm-mono)" }}>
+                {Math.round(node.similarity_score * 100)}%
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Description */}
+        {node.description ? (
+          <div>
+            <div className="text-xs tracking-widest uppercase mb-1.5"
+              style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>About</div>
+            <p className="text-xs leading-relaxed"
+              style={{ color: "#6B6A80", fontFamily: "var(--font-instrument)" }}>
+              {node.description}
+            </p>
+          </div>
+        ) : (
+          <div>
+            <div className="text-xs tracking-widest uppercase mb-1.5"
+              style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>Concept</div>
+            <p className="text-xs leading-relaxed italic"
+              style={{ color: "#3A3A5C", fontFamily: "var(--font-instrument)" }}>
+              No description available in current DKG version.
+            </p>
+          </div>
+        )}
+
+        {/* Prerequisites */}
+        {(node.prerequisites || []).length > 0 && (
+          <div>
+            <div className="text-xs tracking-widest uppercase mb-2"
+              style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>
+              Prerequisites ({node.prerequisites!.length})
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {node.prerequisites!.map(prereqId => {
+                const prereq = prereqNodes.find(n => n.id === prereqId);
+                const pColor = prereq ? NODE_STATUS_COLOR(prereq.status, subjectColor) : "#3A3A5C";
+                return (
+                  <div key={prereqId} className="flex items-center gap-2 px-2 py-1.5"
+                    style={{ border: "1px solid #1E1E36", backgroundColor: "#0F0F1A" }}>
+                    <div className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: pColor }} />
+                    <span className="text-xs truncate"
+                      style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>
+                      {prereq?.label ?? prereqId}
+                    </span>
+                    {prereq && (
+                      <span className="ml-auto text-xs flex-shrink-0"
+                        style={{ color: pColor, fontFamily: "var(--font-dm-mono)" }}>
+                        {prereq.status}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* DKG link */}
+        {node.matched_dkg_id && (
+          <div>
+            <div className="text-xs tracking-widest uppercase mb-1.5"
+              style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>Mapped To</div>
+            <div className="px-2 py-1.5"
+              style={{ border: "1px solid #1E1E36", backgroundColor: "#0F0F1A" }}>
+              <span className="text-xs"
+                style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>
+                {node.matched_dkg_id}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INTERACTIVE GRAPH PANEL
+// ══════════════════════════════════════════════════════════════════
+function GraphPanel({
+  title,
+  nodes,
+  edges,
+  subjectColor,
+  animate,
+  emptyLabel,
+  onNodeClick,
+  selectedNodeId,
+}: {
+  title: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  subjectColor: string;
+  animate: boolean;
+  emptyLabel?: string;
+  onNodeClick: (node: GraphNode) => void;
+  selectedNodeId?: string | null;
+}) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+
+  const nodeColor = (n: GraphNode) => NODE_STATUS_COLOR(n.status, subjectColor);
+  const edgeColor = (s: GraphEdge["status"]) =>
+    s === "wrong" ? "#FF3D57" : `${subjectColor}50`;
+
+  // viewBox auto-sizes to node spread
+  const maxX = Math.max(...nodes.map(n => n.x), 300) + 60;
+  const maxY = Math.max(...nodes.map(n => n.y), 200) + 60;
+
+  return (
+    <div className="flex flex-col h-full relative"
+      style={{ border: "1px solid #1E1E36", backgroundColor: "#0A0A14" }}>
       <div className="flex items-center justify-between px-4 py-2.5 flex-shrink-0"
         style={{ borderBottom: "1px solid #1E1E36" }}>
         <span className="text-xs tracking-widest uppercase"
           style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>{title}</span>
         <span className="text-xs" style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>
           {nodes.length} nodes
+          {nodes.length > 0 && <span style={{ color: "#1E1E36" }}> · click to explore</span>}
         </span>
       </div>
+
       <div className="flex-1 relative overflow-hidden">
         {nodes.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-xs text-center px-4"
-              style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)", lineHeight: 1.8 }}>
+            <span className="text-xs text-center px-4 whitespace-pre-line"
+              style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)", lineHeight: 1.9 }}>
               {emptyLabel || "No data yet"}
             </span>
           </div>
         ) : (
-          <svg width="100%" height="100%" viewBox="0 0 420 360" className="absolute inset-0">
+          <svg
+            width="100%" height="100%"
+            viewBox={`0 0 ${maxX} ${maxY}`}
+            style={{ cursor: "default" }}
+          >
             <defs>
               <marker id={`arr-${title}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                <path d="M0,0 L0,6 L6,3 z" fill="#3A3A5C60" />
+                <path d="M0,0 L0,6 L6,3 z" fill="#2A2A44" />
               </marker>
             </defs>
+
+            {/* Grid dots for depth */}
+            <pattern id={`grid-${title}`} x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse">
+              <circle cx="1" cy="1" r="0.5" fill="#1E1E36" />
+            </pattern>
+            <rect width="100%" height="100%" fill={`url(#grid-${title})`} />
+
+            {/* Edges */}
             {edges.map((edge, i) => {
               const from = nodeMap[edge.from];
               const to   = nodeMap[edge.to];
               if (!from || !to) return null;
+              const isHighlighted = hoveredId === edge.from || hoveredId === edge.to
+                || selectedNodeId === edge.from || selectedNodeId === edge.to;
               return (
-                <line key={`e-${i}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                  stroke={edgeColor(edge.status)}
-                  strokeWidth={edge.status === "wrong" ? 2 : 1.5}
-                  strokeDasharray={edge.status === "missing" ? "4 4" : "none"}
-                  markerEnd={`url(#arr-${title})`}
-                  style={{ opacity: animate ? 1 : 0, transition: `opacity 0.4s ease ${i * 60}ms` }} />
+                <g key={`e-${i}`}>
+                  <line
+                    x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                    stroke={isHighlighted ? edgeColor(edge.status) : "#1E1E36"}
+                    strokeWidth={edge.status === "wrong" ? 2 : 1.5}
+                    strokeDasharray={edge.status === "missing" ? "4 4" : "none"}
+                    markerEnd={`url(#arr-${title})`}
+                    style={{
+                      opacity: animate ? (isHighlighted ? 1 : 0.4) : 0,
+                      transition: `opacity 0.3s ease ${i * 40}ms`,
+                    }}
+                  />
+                  {/* Edge relation label on hover */}
+                  {isHighlighted && edge.relation && (
+                    <text
+                      x={(from.x + to.x) / 2}
+                      y={(from.y + to.y) / 2 - 5}
+                      textAnchor="middle"
+                      fill="#3A3A5C"
+                      fontSize={6}
+                      fontFamily="var(--font-dm-mono)"
+                    >
+                      {edge.relation}
+                    </text>
+                  )}
+                </g>
               );
             })}
-            {nodes.map((node, i) => (
-              <g key={node.id}
-                style={{ opacity: animate ? 1 : 0, transition: `opacity 0.3s ease ${i * 50}ms` }}>
-                {node.status === "misconception" && (
-                  <circle cx={node.x} cy={node.y} r={19} fill="none" stroke="#FF3D57"
-                    strokeWidth={1} opacity={0.35}
-                    style={{ animation: "nodePulse 1.5s ease-in-out infinite" }} />
-                )}
-                <circle cx={node.x} cy={node.y}
-                  r={node.status === "unvisited" ? 8 : 12}
-                  fill={`${nodeColor(node.status)}15`}
-                  stroke={nodeColor(node.status)}
-                  strokeWidth={node.status === "unvisited" ? 1 : 1.5}
-                  strokeDasharray={node.status === "unvisited" ? "3 3" : "none"} />
-                <text x={node.x} y={node.y + 24} textAnchor="middle"
-                  fill={nodeColor(node.status)} fontSize={7.5}
-                  fontFamily="var(--font-dm-mono)">
-                  {node.label.length > 14 ? node.label.slice(0, 13) + "…" : node.label}
-                </text>
-              </g>
-            ))}
+
+            {/* Nodes */}
+            {nodes.map((node, i) => {
+              const color     = nodeColor(node);
+              const isHovered = hoveredId === node.id;
+              const isSelected = selectedNodeId === node.id;
+              const r = node.status === "unvisited" ? 8 : 13;
+              return (
+                <g
+                  key={node.id}
+                  style={{
+                    opacity:    animate ? 1 : 0,
+                    transition: `opacity 0.3s ease ${i * 40}ms`,
+                    cursor:     "pointer",
+                  }}
+                  onMouseEnter={() => setHoveredId(node.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  onClick={() => onNodeClick(node)}
+                >
+                  {/* Selection glow ring */}
+                  {isSelected && (
+                    <circle cx={node.x} cy={node.y} r={r + 8}
+                      fill="none" stroke={color} strokeWidth={1} opacity={0.25} />
+                  )}
+                  {/* Misconception pulse ring */}
+                  {node.status === "misconception" && (
+                    <circle cx={node.x} cy={node.y} r={r + 5}
+                      fill="none" stroke="#FF3D57" strokeWidth={1} opacity={0.3}
+                      style={{ animation: "nodePulse 1.5s ease-in-out infinite" }} />
+                  )}
+                  {/* Hover ring */}
+                  {isHovered && !isSelected && (
+                    <circle cx={node.x} cy={node.y} r={r + 5}
+                      fill="none" stroke={color} strokeWidth={1} opacity={0.35} />
+                  )}
+                  {/* Main circle */}
+                  <circle
+                    cx={node.x} cy={node.y} r={isHovered || isSelected ? r + 2 : r}
+                    fill={isSelected ? `${color}25` : `${color}12`}
+                    stroke={color}
+                    strokeWidth={isSelected ? 2 : node.status === "unvisited" ? 1 : 1.5}
+                    strokeDasharray={node.status === "unvisited" ? "3 3" : "none"}
+                    style={{ transition: "all 0.15s ease" }}
+                  />
+                  {/* Label */}
+                  <text
+                    x={node.x} y={node.y + r + 11}
+                    textAnchor="middle"
+                    fill={isHovered || isSelected ? color : "#3A3A5C"}
+                    fontSize={7}
+                    fontFamily="var(--font-dm-mono)"
+                    style={{ transition: "fill 0.15s ease", userSelect: "none" }}
+                  >
+                    {node.label.length > 16 ? node.label.slice(0, 15) + "…" : node.label}
+                  </text>
+                  {/* Hover tooltip */}
+                  {isHovered && !isSelected && (
+                    <g>
+                      <rect
+                        x={node.x - 45} y={node.y - r - 28}
+                        width={90} height={18}
+                        rx={2} fill="#0F0F1A"
+                        stroke={color} strokeWidth={0.5} strokeOpacity={0.5}
+                      />
+                      <text
+                        x={node.x} y={node.y - r - 16}
+                        textAnchor="middle"
+                        fill={color} fontSize={7}
+                        fontFamily="var(--font-dm-mono)"
+                      >
+                        {node.label.length > 18 ? node.label.slice(0, 17) + "…" : node.label}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
           </svg>
         )}
       </div>
@@ -351,379 +715,8 @@ function GraphPanel({ title, nodes, edges, subjectColor, animate, emptyLabel }: 
 }
 
 // ══════════════════════════════════════════════════════════════════
-// SIMULATION MODAL
+// ANALYSIS SUBCOMPONENTS
 // ══════════════════════════════════════════════════════════════════
-function SimulationModal({ hint, query, tier, subject, onClose }: {
-  hint: string; query: string; tier: Tier; subject: string; onClose: () => void;
-}) {
-  const tierCfg = tier ? TIER_CONFIG[tier] : TIER_CONFIG.T2;
-
-  const renderSim = () => {
-    switch (hint) {
-      case "transform":  return <TransformSim />;
-      case "graph_plot": return <GraphPlotSim />;
-      case "wave":       return <WaveSim />;
-      case "force":      return <ForceSim />;
-      case "sort":       return <SortSim />;
-      default:           return <GenericSim subjectColor={SUBJECT_COLORS[subject] || "#1A4D9F"} />;
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "#08080FCC", backdropFilter: "blur(8px)" }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="flex flex-col"
-        style={{ width: 760, maxHeight: "88vh", backgroundColor: "#0F0F1A",
-                 border: "1px solid #1E1E36", overflow: "hidden" }}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 flex-shrink-0"
-          style={{ borderBottom: "1px solid #1E1E36" }}>
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tierCfg.color }} />
-            <span className="text-sm font-black tracking-widest uppercase"
-              style={{ color: "#F0F0FF", fontFamily: "var(--font-syne)" }}>Concept Simulation</span>
-            <span className="text-xs px-2 py-0.5"
-              style={{ backgroundColor: "#16162A", color: "#6B6A80",
-                       border: "1px solid #1E1E36", fontFamily: "var(--font-dm-mono)" }}>
-              {SIMULATION_HINT_LABELS[hint] || hint}
-            </span>
-          </div>
-          <button onClick={onClose} className="text-xs px-3 py-1.5"
-            style={{ color: "#3A3A5C", border: "1px solid #1E1E36", fontFamily: "var(--font-dm-mono)" }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = "#FF3D5750")}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = "#1E1E36")}>
-            ✕ Close
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6">
-          {/* Query echo */}
-          <div className="mb-4 px-4 py-3" style={{ backgroundColor: "#16162A", border: "1px solid #1E1E36" }}>
-            <p className="text-xs" style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>Your query</p>
-            <p className="text-sm mt-1 leading-relaxed"
-              style={{ color: "#F0F0FF", fontFamily: "var(--font-instrument)" }}>{query}</p>
-          </div>
-
-          {/* Phase labels */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="px-4 py-3" style={{ backgroundColor: "#FF3D5710", border: "1px solid #FF3D5730" }}>
-              <p className="text-xs mb-1" style={{ color: "#FF3D57", fontFamily: "var(--font-dm-mono)" }}>
-                YOUR MODEL
-              </p>
-              <p className="text-xs" style={{ color: "#6B6A80", fontFamily: "var(--font-instrument)" }}>
-                What your query implies about this concept
-              </p>
-            </div>
-            <div className="px-4 py-3" style={{ backgroundColor: "#C8FF0010", border: "1px solid #C8FF0030" }}>
-              <p className="text-xs mb-1" style={{ color: "#C8FF00", fontFamily: "var(--font-dm-mono)" }}>
-                CORRECT MODEL
-              </p>
-              <p className="text-xs" style={{ color: "#6B6A80", fontFamily: "var(--font-instrument)" }}>
-                What the Domain Knowledge Graph says is correct
-              </p>
-            </div>
-          </div>
-
-          <div style={{ border: "1px solid #1E1E36", backgroundColor: "#08080F" }}>
-            {renderSim()}
-          </div>
-        </div>
-
-        <div className="px-6 py-4 flex-shrink-0 flex items-center justify-between"
-          style={{ borderTop: "1px solid #1E1E36" }}>
-          <p className="text-xs" style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>
-            Tier {tier} · {tierCfg.label} · The gap between the two models is your lesson
-          </p>
-          <button onClick={onClose}
-            className="px-5 py-2 text-xs font-black tracking-widest"
-            style={{ backgroundColor: "#C8FF00", color: "#08080F", fontFamily: "var(--font-syne)" }}>
-            GOT IT →
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Simulation renderers ───────────────────────────────────────────
-
-function PhaseToggle({ phase, onToggle }: { phase: "student" | "correct"; onToggle: () => void }) {
-  return (
-    <div className="flex justify-center mt-3">
-      <button onClick={onToggle}
-        className="px-4 py-2 text-xs font-black tracking-widest"
-        style={{ backgroundColor: phase === "student" ? "#FF3D5720" : "#C8FF0020",
-                 color: phase === "student" ? "#FF3D57" : "#C8FF00",
-                 border: `1px solid ${phase === "student" ? "#FF3D5750" : "#C8FF0050"}`,
-                 fontFamily: "var(--font-dm-mono)" }}>
-        {phase === "student" ? "→ See correct model" : "← See your model"}
-      </button>
-    </div>
-  );
-}
-
-function TransformSim() {
-  const [phase, setPhase] = useState<"student" | "correct">("student");
-  const [animating, setAnimating] = useState(false);
-  function toggle() { setAnimating(true); setTimeout(() => { setPhase(p => p === "student" ? "correct" : "student"); setAnimating(false); }, 350); }
-
-  const student = [
-    { x: 200, y: 180, label: "eigenvalue = direction-invariant vector", color: "#FF3D57" },
-  ];
-  const correct = [
-    { x: 150, y: 160, label: "λ = scalar",     color: "#C8FF00" },
-    { x: 280, y: 130, label: "v = eigenvector", color: "#00E5FF" },
-    { x: 210, y:  70, label: "Av = λv",         color: "#C8FF00" },
-  ];
-  const pts = phase === "student" ? student : correct;
-
-  return (
-    <div className="p-4">
-      <svg width="100%" height="220" viewBox="0 0 420 220"
-        style={{ opacity: animating ? 0.2 : 1, transition: "opacity 0.35s" }}>
-        {[60,120,180,240,300,360].map(x => <line key={x} x1={x} y1={20} x2={x} y2={200} stroke="#1E1E36" strokeWidth={0.5} />)}
-        {[40,80,120,160,200].map(y  => <line key={y} x1={40} y1={y} x2={400} y2={y} stroke="#1E1E36" strokeWidth={0.5} />)}
-        <line x1={40} y1={110} x2={400} y2={110} stroke="#2A2A4A" strokeWidth={1} />
-        <line x1={200} y1={20} x2={200} y2={200} stroke="#2A2A4A" strokeWidth={1} />
-        <defs>
-          {["FF3D57","C8FF00","00E5FF"].map(c => (
-            <marker key={c} id={`a${c}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L6,3 z" fill={`#${c}`} />
-            </marker>
-          ))}
-        </defs>
-        {pts.map((pt, i) => (
-          <g key={i} style={{ transition: "all 0.5s ease" }}>
-            <line x1={200} y1={110} x2={pt.x} y2={pt.y}
-              stroke={pt.color} strokeWidth={2}
-              markerEnd={`url(#a${pt.color.replace("#","")})`} />
-            <circle cx={pt.x} cy={pt.y} r={6} fill={`${pt.color}20`} stroke={pt.color} strokeWidth={1.5} />
-            <text x={pt.x + 10} y={pt.y + 4} fill={pt.color} fontSize={9} fontFamily="var(--font-dm-mono)">
-              {pt.label.length > 20 ? pt.label.slice(0,19)+"…" : pt.label}
-            </text>
-          </g>
-        ))}
-      </svg>
-      <PhaseToggle phase={phase} onToggle={toggle} />
-    </div>
-  );
-}
-
-function GraphPlotSim() {
-  const [phase, setPhase] = useState<"student" | "correct">("student");
-  const [animating, setAnimating] = useState(false);
-  function toggle() { setAnimating(true); setTimeout(() => { setPhase(p => p === "student" ? "correct" : "student"); setAnimating(false); }, 350); }
-  const W = 420, H = 200, ox = 40, oy = 100, sy = 60;
-
-  function studentPath() {
-    let d = `M ${ox} ${oy}`;
-    for (let i = 0; i <= 360; i += 5) {
-      const x = ox + (i / 360) * (W - ox - 20);
-      const y = oy - Math.sin((i * Math.PI) / 180) * sy * 1.6;
-      d += ` L ${x} ${y}`;
-    }
-    return d;
-  }
-  function correctPath() {
-    let d = `M ${ox} ${oy - sy}`;
-    for (let i = 0; i <= 360; i += 5) {
-      const x = ox + (i / 360) * (W - ox - 20);
-      const y = oy - Math.cos((i * Math.PI) / 180) * sy;
-      d += ` L ${x} ${y}`;
-    }
-    return d;
-  }
-
-  return (
-    <div className="p-4">
-      <svg width="100%" height="200" viewBox={`0 0 ${W} ${H}`}
-        style={{ opacity: animating ? 0.2 : 1, transition: "opacity 0.35s" }}>
-        <line x1={ox} y1={20} x2={ox} y2={H-10} stroke="#2A2A4A" strokeWidth={1.5} />
-        <line x1={ox} y1={oy} x2={W-10} y2={oy} stroke="#2A2A4A" strokeWidth={1.5} />
-        <path d={phase === "student" ? studentPath() : correctPath()}
-          fill="none" stroke={phase === "student" ? "#FF3D57" : "#C8FF00"} strokeWidth={2}
-          style={{ transition: "stroke 0.4s" }} />
-        <text x={ox+10} y={30} fill={phase === "student" ? "#FF3D57" : "#C8FF00"}
-          fontSize={10} fontFamily="var(--font-dm-mono)">
-          {phase === "student" ? "d/dx sin(x) ≈ sin(x) × 1.6  ✗" : "d/dx sin(x) = cos(x)  ✓"}
-        </text>
-      </svg>
-      <PhaseToggle phase={phase} onToggle={toggle} />
-    </div>
-  );
-}
-
-function WaveSim() {
-  const [t, setT] = useState(0);
-  const [phase, setPhase] = useState<"student" | "correct">("student");
-  useEffect(() => {
-    let raf: number;
-    const loop = () => { setT(p => p + 0.04); raf = requestAnimationFrame(loop); };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-  const W = 420, H = 180, oy = 90;
-  const path = (amp: number, freq: number, ps: number) => {
-    let d = "";
-    for (let x = 0; x <= W; x += 3) {
-      const y = oy - amp * Math.sin((x / W) * Math.PI * 2 * freq + t + ps);
-      d += x === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`;
-    }
-    return d;
-  };
-  return (
-    <div className="p-4">
-      <svg width="100%" height="180" viewBox={`0 0 ${W} ${H}`}>
-        <line x1={0} y1={oy} x2={W} y2={oy} stroke="#1E1E36" strokeWidth={1} />
-        {phase === "student" ? (
-          <>
-            <path d={path(65, 1, 0)} fill="none" stroke="#FF3D57" strokeWidth={2} />
-            <text x={10} y={20} fill="#FF3D57" fontSize={9} fontFamily="var(--font-dm-mono)">
-              High frequency = high amplitude (✗)
-            </text>
-          </>
-        ) : (
-          <>
-            <path d={path(30, 3, 0)} fill="none" stroke="#C8FF00" strokeWidth={2} />
-            <path d={path(65, 1, 0)} fill="none" stroke="#00E5FF" strokeWidth={1.5} strokeDasharray="4 2" />
-            <text x={10} y={20} fill="#C8FF00" fontSize={9} fontFamily="var(--font-dm-mono)">
-              Frequency ≠ Amplitude — they are independent (✓)
-            </text>
-          </>
-        )}
-      </svg>
-      <PhaseToggle phase={phase} onToggle={() => setPhase(p => p === "student" ? "correct" : "student")} />
-    </div>
-  );
-}
-
-function ForceSim() {
-  const [phase, setPhase] = useState<"student" | "correct">("student");
-  return (
-    <div className="p-4">
-      <svg width="100%" height="220" viewBox="0 0 420 220">
-        <rect x={170} y={90} width={80} height={50} fill="#16162A" stroke="#2A2A4A" strokeWidth={1.5} rx={2} />
-        <text x={210} y={120} textAnchor="middle" fill="#6B6A80" fontSize={10} fontFamily="var(--font-dm-mono)">object</text>
-        <line x1={100} y1={140} x2={320} y2={140} stroke="#2A2A4A" strokeWidth={1.5} />
-        <defs>
-          <marker id="aRed" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-            <path d="M0,0 L0,6 L6,3 z" fill="#FF3D57" />
-          </marker>
-          <marker id="aGreen" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-            <path d="M0,0 L0,6 L6,3 z" fill="#C8FF00" />
-          </marker>
-        </defs>
-        {phase === "student" ? (
-          <>
-            <line x1={210} y1={90} x2={210} y2={30} stroke="#FF3D57" strokeWidth={3} markerEnd="url(#aRed)" />
-            <text x={225} y={55} fill="#FF3D57" fontSize={9} fontFamily="var(--font-dm-mono)">g ~ mass (✗)</text>
-            <text x={125} y={175} fill="#FF3D57" fontSize={9} fontFamily="var(--font-dm-mono)">Heavier objects fall faster</text>
-          </>
-        ) : (
-          <>
-            {[190,210,230].map((x, i) => (
-              <line key={x} x1={x} y1={90} x2={x} y2={30}
-                stroke="#C8FF00" strokeWidth={i===1?2.5:1.5} strokeOpacity={i===1?1:0.4}
-                markerEnd="url(#aGreen)" />
-            ))}
-            <text x={248} y={55} fill="#C8FF00" fontSize={9} fontFamily="var(--font-dm-mono)">g = 9.8 m/s² (✓)</text>
-            <text x={115} y={175} fill="#C8FF00" fontSize={9} fontFamily="var(--font-dm-mono)">All objects fall at the same rate</text>
-          </>
-        )}
-      </svg>
-      <PhaseToggle phase={phase} onToggle={() => setPhase(p => p === "student" ? "correct" : "student")} />
-    </div>
-  );
-}
-
-function SortSim() {
-  const init = [5, 2, 8, 1, 9, 3];
-  const [arr, setArr] = useState([...init]);
-  const [step, setStep] = useState(0);
-  function nextStep() {
-    const a = [...arr];
-    for (let i = 0; i < a.length - 1 - step; i++) {
-      if (a[i] > a[i + 1]) { [a[i], a[i + 1]] = [a[i + 1], a[i]]; break; }
-    }
-    setArr(a); setStep(s => s + 1);
-  }
-  return (
-    <div className="p-6">
-      <div className="flex items-end justify-center gap-3 mb-6" style={{ height: 100 }}>
-        {arr.map((val, i) => (
-          <div key={i} className="flex flex-col items-center gap-1">
-            <div className="text-xs" style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>{val}</div>
-            <div style={{ width: 36, height: val * 9,
-              backgroundColor: i < step ? "#C8FF0030" : "#1E1E36",
-              border: `1px solid ${i < step ? "#C8FF0060" : "#3A3A5C"}`,
-              transition: "all 0.3s ease" }} />
-          </div>
-        ))}
-      </div>
-      <div className="flex justify-center gap-3">
-        <button onClick={nextStep} disabled={step >= arr.length}
-          className="px-4 py-2 text-xs font-black disabled:opacity-30"
-          style={{ backgroundColor: "#C8FF0020", color: "#C8FF00",
-                   border: "1px solid #C8FF0050", fontFamily: "var(--font-dm-mono)" }}>
-          Step →
-        </button>
-        <button onClick={() => { setArr([...init]); setStep(0); }}
-          className="px-4 py-2 text-xs"
-          style={{ border: "1px solid #1E1E36", color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>
-          Reset
-        </button>
-      </div>
-      <p className="text-xs text-center mt-3" style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>
-        Bubble sort — step through to see O(n²) comparison pattern
-      </p>
-    </div>
-  );
-}
-
-function GenericSim({ subjectColor }: { subjectColor: string }) {
-  const [phase, setPhase] = useState<"student" | "correct">("student");
-  const sn = [{ x: 120, y: 100, label: "Concept A", color: "#FF3D57" },
-              { x: 280, y: 100, label: "Concept B", color: "#FF3D57" },
-              { x: 200, y: 180, label: "Concept C", color: "#FF3D57" }];
-  const cn = [{ x: 200, y:  70, label: "Root",     color: "#C8FF00" },
-              { x: 120, y: 155, label: "Branch A",  color: subjectColor },
-              { x: 280, y: 155, label: "Branch B",  color: subjectColor }];
-  const pts = phase === "student" ? sn : cn;
-  return (
-    <div className="p-4">
-      <svg width="100%" height="230" viewBox="0 0 420 230">
-        {phase === "correct" && (
-          <>
-            <line x1={200} y1={70} x2={120} y2={155} stroke={`${subjectColor}60`} strokeWidth={1.5} />
-            <line x1={200} y1={70} x2={280} y2={155} stroke={`${subjectColor}60`} strokeWidth={1.5} />
-          </>
-        )}
-        {phase === "student" && (
-          <>
-            <line x1={120} y1={100} x2={280} y2={100} stroke="#FF3D5760" strokeWidth={1.5} strokeDasharray="4 3" />
-            <line x1={200} y1={100} x2={200} y2={180} stroke="#FF3D5760" strokeWidth={1.5} strokeDasharray="4 3" />
-          </>
-        )}
-        {pts.map((n, i) => (
-          <g key={i}>
-            <circle cx={n.x} cy={n.y} r={26} fill={`${n.color}15`} stroke={n.color} strokeWidth={1.5} />
-            <text x={n.x} y={n.y + 4} textAnchor="middle" fill={n.color} fontSize={9}
-              fontFamily="var(--font-dm-mono)">{n.label}</text>
-          </g>
-        ))}
-        <text x={210} y={220} fill={phase === "student" ? "#FF3D57" : "#C8FF00"}
-          fontSize={10} fontFamily="var(--font-dm-mono)">
-          {phase === "student" ? "✗ Your model" : "✓ Expert model"}
-        </text>
-      </svg>
-      <PhaseToggle phase={phase} onToggle={() => setPhase(p => p === "student" ? "correct" : "student")} />
-    </div>
-  );
-}
-
-// ── Analysis sub-components ────────────────────────────────────────
-
 function TierBadge({ tier, tierScore }: { tier: Tier; tierScore?: number }) {
   if (!tier) return null;
   const cfg = TIER_CONFIG[tier];
@@ -780,16 +773,11 @@ function MetricsPanel({ metrics }: { metrics: ApiResponse["metrics"] }) {
           return (
             <div key={item.label}>
               <div className="flex justify-between mb-1">
-                <span className="text-xs" style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>
-                  {item.label}
-                </span>
-                <span className="text-xs font-black" style={{ color, fontFamily: "var(--font-dm-mono)" }}>
-                  {pct}%
-                </span>
+                <span className="text-xs" style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>{item.label}</span>
+                <span className="text-xs font-black" style={{ color, fontFamily: "var(--font-dm-mono)" }}>{pct}%</span>
               </div>
               <div className="h-0.5 w-full" style={{ backgroundColor: "#1E1E36" }}>
-                <div className="h-full transition-all duration-500"
-                  style={{ width: `${pct}%`, backgroundColor: color }} />
+                <div className="h-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
               </div>
             </div>
           );
@@ -978,6 +966,92 @@ function TutorChat({ messages, onSend, isPro, disabled }: {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// SIMULATE BUTTON — requests simulation from backend if not present
+// ══════════════════════════════════════════════════════════════════
+function SimulateButton({
+  result,
+  query,
+  subject,
+  uid,
+  onSimData,
+  onOpen,
+}: {
+  result: SessionResult | null;
+  query: string;
+  subject: string;
+  uid: string;
+  onSimData: (data: SimulationData) => void;
+  onOpen: () => void;
+}) {
+  const [fetching, setFetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const hasSimData = !!result?.simulationData;
+
+  const handleClick = useCallback(async () => {
+    if (hasSimData) { onOpen(); return; }
+    if (!result) return;
+    setFetching(true); setFetchError(null);
+    try {
+      // Hit the same analyze endpoint — simulation is embedded in response
+      // If the session already ran and returned simulatable=false, we re-request
+      // via a lightweight /api/simulation/generate endpoint (Phase 2).
+      // For now, use the main endpoint with a short query focused on simulation.
+      const response = await fetch(`${API_BASE}/api/session/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${uid}` },
+        body: JSON.stringify({ query, subject, userId: uid }),
+      });
+      if (!response.ok) throw new Error(`API ${response.status}`);
+      const data: ApiResponse = await response.json();
+      const simData = mapSimulationData(data.simulation, data.subject);
+      if (simData) { onSimData(simData); onOpen(); }
+      else setFetchError("This concept cannot be simulated yet.");
+    } catch (e) {
+      setFetchError(e instanceof Error ? e.message : "Simulation unavailable");
+    } finally { setFetching(false); }
+  }, [hasSimData, result, query, subject, uid, onSimData, onOpen]);
+
+  if (!result) return null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        onClick={handleClick}
+        disabled={fetching}
+        className="w-full py-3 flex items-center justify-center gap-2 text-xs font-black tracking-widest transition-all disabled:opacity-50"
+        style={{
+          backgroundColor: hasSimData ? "#7B5CFF15" : "#16162A",
+          color: "#7B5CFF",
+          border: `1px solid ${hasSimData ? "#7B5CFF40" : "#1E1E36"}`,
+          fontFamily: "var(--font-dm-mono)",
+          cursor: "pointer",
+          animation: hasSimData ? "simPulse 2.5s ease-in-out infinite" : "none",
+        }}
+        onMouseEnter={e => (e.currentTarget.style.backgroundColor = "#7B5CFF25")}
+        onMouseLeave={e => (e.currentTarget.style.backgroundColor = hasSimData ? "#7B5CFF15" : "#16162A")}
+      >
+        {fetching ? (
+          <>
+            <span style={{ animation: "pulse 1s infinite", display: "inline-block", width: 6, height: 6, borderRadius: "50%", backgroundColor: "#7B5CFF" }} />
+            Generating simulation...
+          </>
+        ) : (
+          <>
+            ▶{" "}
+            {hasSimData ? `VISUALISE · ${result.simulationData?.label}` : "SIMULATE THIS CONCEPT"}
+          </>
+        )}
+      </button>
+      {fetchError && (
+        <p className="text-xs text-center" style={{ color: "#FF3D57", fontFamily: "var(--font-dm-mono)" }}>
+          {fetchError}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ══════════════════════════════════════════════════════════════════
 export default function SessionPage() {
@@ -987,20 +1061,24 @@ export default function SessionPage() {
   const preQuery   = searchParams.get("q") || searchParams.get("concept") || "";
   const preSubject = searchParams.get("subject") || user?.subjects?.[0] || "mathematics";
 
-  const [query,          setQuery]          = useState(preQuery);
-  const [subject,        setSubject]        = useState(preSubject);
-  const [loading,        setLoading]        = useState(false);
-  const [loadingStep,    setLoadingStep]    = useState("");
-  const [result,         setResult]         = useState<SessionResult | null>(null);
-  const [animateGraph,   setAnimateGraph]   = useState(false);
-  const [streamedExp,    setStreamedExp]    = useState("");
-  const [streaming,      setStreaming]      = useState(false);
-  const [chatMessages,   setChatMessages]   = useState<ChatMessage[]>([]);
-  const [chatLoading,    setChatLoading]    = useState(false);
-  const [sessionTime,    setSessionTime]    = useState(0);
-  const [sessionActive,  setSessionActive]  = useState(false);
-  const [apiError,       setApiError]       = useState<string | null>(null);
-  const [showSimulation, setShowSimulation] = useState(false);
+  const [query,         setQuery]         = useState(preQuery);
+  const [subject,       setSubject]       = useState(preSubject);
+  const [loading,       setLoading]       = useState(false);
+  const [loadingStep,   setLoadingStep]   = useState("");
+  const [result,        setResult]        = useState<SessionResult | null>(null);
+  const [animateGraph,  setAnimateGraph]  = useState(false);
+  const [streamedExp,   setStreamedExp]   = useState("");
+  const [streaming,     setStreaming]     = useState(false);
+  const [chatMessages,  setChatMessages]  = useState<ChatMessage[]>([]);
+  const [chatLoading,   setChatLoading]   = useState(false);
+  const [sessionTime,   setSessionTime]   = useState(0);
+  const [sessionActive, setSessionActive] = useState(false);
+  const [apiError,      setApiError]      = useState<string | null>(null);
+  const [showSim,       setShowSim]       = useState(false);
+
+  // Node detail drawer state
+  const [selectedNode,      setSelectedNode]      = useState<GraphNode | null>(null);
+  const [selectedNodePanel, setSelectedNodePanel] = useState<"SKG" | "DKG" | null>(null);
 
   const sessionStartRef = useRef<number>(Date.now());
   const timerRef        = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1017,9 +1095,31 @@ export default function SessionPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [sessionActive]);
 
+  // Close drawer on ESC
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedNode) { setSelectedNode(null); setSelectedNodePanel(null); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectedNode]);
+
   function formatTime(s: number) {
     return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
   }
+
+  const handleNodeClick = useCallback((node: GraphNode, panel: "SKG" | "DKG") => {
+    if (selectedNode?.id === node.id && selectedNodePanel === panel) {
+      setSelectedNode(null); setSelectedNodePanel(null);
+    } else {
+      setSelectedNode(node); setSelectedNodePanel(panel);
+    }
+  }, [selectedNode, selectedNodePanel]);
+
+  // Inject extra simulation data from SimulateButton re-fetch
+  const handleInjectSimData = useCallback((simData: SimulationData) => {
+    setResult(prev => prev ? { ...prev, simulationData: simData } : prev);
+  }, []);
 
   async function handleSubmit(q?: string) {
     const queryText = (q || query).trim();
@@ -1027,7 +1127,8 @@ export default function SessionPage() {
 
     setLoading(true); setAnimateGraph(false);
     setStreamedExp(""); setStreaming(false);
-    setResult(null); setApiError(null); setShowSimulation(false);
+    setResult(null); setApiError(null); setShowSim(false);
+    setSelectedNode(null); setSelectedNodePanel(null);
 
     if (!sessionActive) { setSessionActive(true); sessionStartRef.current = Date.now(); }
 
@@ -1061,8 +1162,6 @@ export default function SessionPage() {
       }
 
       const data: ApiResponse = await response.json();
-      console.log("[session/analyze]", data);
-
       const mappedResult = mapApiResponse(data);
       setResult(mappedResult);
       setLoading(false);
@@ -1114,17 +1213,21 @@ export default function SessionPage() {
   const stageBg      = STAGE_BG[tier || "none"];
   const isPro        = user?.plan === "pro";
 
+  // All nodes for prerequisite resolution in drawer
+  const allNodes = [...(result?.skgNodes || []), ...(result?.dkgNodes || [])];
+
   return (
     <div className="flex flex-col"
       style={{ height: "100vh", backgroundColor: "#08080F",
                background: stageBg !== "none" ? `${stageBg}, #08080F` : "#08080F",
                transition: "background 0.8s ease", color: "#F0F0FF", overflow: "hidden" }}>
 
-      {/* ── SIMULATION MODAL ── */}
-      {showSimulation && result?.simulatable && result.simulationHint && (
-        <SimulationModal hint={result.simulationHint} query={query} tier={tier}
-          subject={result.subject} onClose={() => setShowSimulation(false)} />
-      )}
+      {/* WebGL2 Simulation Modal */}
+      <SimulationModal
+        data={result?.simulationData ?? null}
+        isOpen={showSim}
+        onClose={() => setShowSim(false)}
+      />
 
       {/* ── TOP BAR ── */}
       <header className="flex items-center justify-between px-6 py-3 flex-shrink-0"
@@ -1157,19 +1260,29 @@ export default function SessionPage() {
               {result.processingTimeMs}ms
             </div>
           )}
-          {/* SIMULATE button */}
-          {result?.simulatable && result.simulationHint && (
-            <button onClick={() => setShowSimulation(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs font-black tracking-widest"
-              style={{ backgroundColor: "#7B5CFF20", color: "#7B5CFF",
-                       border: "1px solid #7B5CFF50", fontFamily: "var(--font-dm-mono)",
-                       animation: "simPulse 2s ease-in-out infinite" }}
-              onMouseEnter={e => { e.currentTarget.style.backgroundColor = "#7B5CFF40"; e.currentTarget.style.borderColor = "#7B5CFF"; }}
-              onMouseLeave={e => { e.currentTarget.style.backgroundColor = "#7B5CFF20"; e.currentTarget.style.borderColor = "#7B5CFF50"; }}>
+          {/* Top bar SIMULATE button */}
+          {result && (
+            <button
+              onClick={() => result.simulationData ? setShowSim(true) : undefined}
+              disabled={!result.simulationData}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-black tracking-widest disabled:opacity-30"
+              style={{
+                backgroundColor: result.simulationData ? "#7B5CFF20" : "#16162A",
+                color: "#7B5CFF",
+                border: `1px solid ${result.simulationData ? "#7B5CFF50" : "#1E1E36"}`,
+                fontFamily: "var(--font-dm-mono)",
+                animation: result.simulationData ? "simPulse 2s ease-in-out infinite" : "none",
+                cursor: result.simulationData ? "pointer" : "default",
+              }}
+              onMouseEnter={e => { if (result.simulationData) e.currentTarget.style.backgroundColor = "#7B5CFF40"; }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = result.simulationData ? "#7B5CFF20" : "#16162A"; }}
+            >
               ▶ SIMULATE
-              <span style={{ color: "#7B5CFF80", fontFamily: "var(--font-dm-mono)", fontWeight: 400 }}>
-                {SIMULATION_HINT_LABELS[result.simulationHint] || result.simulationHint}
-              </span>
+              {result.simulationData && (
+                <span style={{ color: "#7B5CFF80", fontWeight: 400 }}>
+                  {result.simulationData.label}
+                </span>
+              )}
             </button>
           )}
         </div>
@@ -1195,26 +1308,64 @@ export default function SessionPage() {
         {/* LEFT — Graphs */}
         <div className="flex flex-col flex-1 min-w-0 p-4 gap-3" style={{ borderRight: "1px solid #1E1E36" }}>
           <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
+
+            {/* SKG */}
             <div className="flex flex-col gap-2 min-h-0">
               <span className="text-xs text-center flex-shrink-0"
                 style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>Your understanding</span>
-              <div className="flex-1 min-h-0">
-                <GraphPanel title="SKG" nodes={result?.skgNodes || []} edges={result?.skgEdges || []}
-                  subjectColor={subjectColor} animate={animateGraph}
-                  emptyLabel={"Submit a query to\nmap your understanding"} />
+              <div className="flex-1 min-h-0 relative">
+                <GraphPanel
+                  title="SKG"
+                  nodes={result?.skgNodes || []}
+                  edges={result?.skgEdges || []}
+                  subjectColor={subjectColor}
+                  animate={animateGraph}
+                  emptyLabel={"Submit a query to\nmap your understanding"}
+                  onNodeClick={node => handleNodeClick(node, "SKG")}
+                  selectedNodeId={selectedNodePanel === "SKG" ? selectedNode?.id : null}
+                />
+                {/* Node drawer — anchored inside SKG panel */}
+                {selectedNode && selectedNodePanel === "SKG" && (
+                  <NodeDetailDrawer
+                    node={selectedNode}
+                    panelTitle="Your Concept"
+                    subjectColor={subjectColor}
+                    onClose={() => { setSelectedNode(null); setSelectedNodePanel(null); }}
+                    allNodes={allNodes}
+                  />
+                )}
               </div>
             </div>
+
+            {/* DKG */}
             <div className="flex flex-col gap-2 min-h-0">
               <span className="text-xs text-center flex-shrink-0"
                 style={{ color: "#6B6A80", fontFamily: "var(--font-dm-mono)" }}>Expert model</span>
-              <div className="flex-1 min-h-0">
-                <GraphPanel title="DKG" nodes={result?.dkgNodes || []} edges={result?.dkgEdges || []}
-                  subjectColor={subjectColor} animate={animateGraph}
-                  emptyLabel={"DKG loads after\nyour first query"} />
+              <div className="flex-1 min-h-0 relative">
+                <GraphPanel
+                  title="DKG"
+                  nodes={result?.dkgNodes || []}
+                  edges={result?.dkgEdges || []}
+                  subjectColor={subjectColor}
+                  animate={animateGraph}
+                  emptyLabel={"DKG loads after\nyour first query"}
+                  onNodeClick={node => handleNodeClick(node, "DKG")}
+                  selectedNodeId={selectedNodePanel === "DKG" ? selectedNode?.id : null}
+                />
+                {selectedNode && selectedNodePanel === "DKG" && (
+                  <NodeDetailDrawer
+                    node={selectedNode}
+                    panelTitle="Expert Concept"
+                    subjectColor={subjectColor}
+                    onClose={() => { setSelectedNode(null); setSelectedNodePanel(null); }}
+                    allNodes={allNodes}
+                  />
+                )}
               </div>
             </div>
           </div>
 
+          {/* Legend */}
           {result && (
             <div className="flex flex-wrap gap-4 flex-shrink-0">
               {[
@@ -1228,6 +1379,9 @@ export default function SessionPage() {
                   <span className="text-xs" style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>{l.label}</span>
                 </div>
               ))}
+              <span className="text-xs ml-2" style={{ color: "#1E1E36", fontFamily: "var(--font-dm-mono)" }}>
+                · click any node to explore
+              </span>
               <div className="ml-auto text-xs" style={{ color: "#3A3A5C", fontFamily: "var(--font-dm-mono)" }}>
                 DKG v{result.dkgVersion}
               </div>
@@ -1259,20 +1413,15 @@ export default function SessionPage() {
               </div>
             )}
 
-            {/* Simulate CTA in panel */}
-            {result?.simulatable && result.simulationHint && (
-              <button onClick={() => setShowSimulation(true)}
-                className="w-full py-3 flex items-center justify-center gap-2 text-xs font-black tracking-widest"
-                style={{ backgroundColor: "#7B5CFF15", color: "#7B5CFF",
-                         border: "1px solid #7B5CFF40", fontFamily: "var(--font-dm-mono)" }}
-                onMouseEnter={e => (e.currentTarget.style.backgroundColor = "#7B5CFF30")}
-                onMouseLeave={e => (e.currentTarget.style.backgroundColor = "#7B5CFF15")}>
-                ▶ VISUALISE THIS CONCEPT
-                <span style={{ fontWeight: 400, opacity: 0.6 }}>
-                  {SIMULATION_HINT_LABELS[result.simulationHint]}
-                </span>
-              </button>
-            )}
+            {/* Simulate CTA — connected to backend */}
+            <SimulateButton
+              result={result}
+              query={query}
+              subject={subject}
+              uid={user?.uid || "dev"}
+              onSimData={handleInjectSimData}
+              onOpen={() => setShowSim(true)}
+            />
 
             {apiError && (
               <div className="px-4 py-3 flex flex-col gap-2"
@@ -1338,10 +1487,11 @@ export default function SessionPage() {
       </div>
 
       <style>{`
-        @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:0.3} }
-        @keyframes blink    { 0%,100%{opacity:1} 50%{opacity:0}   }
-        @keyframes nodePulse{ 0%,100%{opacity:0.4} 50%{opacity:0.9} }
-        @keyframes simPulse { 0%,100%{box-shadow:0 0 0px #7B5CFF00} 50%{box-shadow:0 0 12px #7B5CFF40} }
+        @keyframes pulse       { 0%,100%{opacity:1}   50%{opacity:0.3} }
+        @keyframes blink       { 0%,100%{opacity:1}   50%{opacity:0}   }
+        @keyframes nodePulse   { 0%,100%{opacity:0.3} 50%{opacity:0.8} }
+        @keyframes simPulse    { 0%,100%{box-shadow:0 0 0px #7B5CFF00} 50%{box-shadow:0 0 14px #7B5CFF40} }
+        @keyframes slideInRight{ from{transform:translateX(20px);opacity:0} to{transform:translateX(0);opacity:1} }
       `}</style>
     </div>
   );
