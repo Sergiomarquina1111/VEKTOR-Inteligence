@@ -1,139 +1,197 @@
-# simulation_params.txt — VEKTOR Intelligence
-# Version: 1.2.0
-# Called by: services/simulator.py after session analysis completes
+/**
+ * src/simulation/templates/graph_plot.ts
+ * VEKTOR — Function & Derivative Simulation (Pure Fragment Shader)
+ *
+ * BOTH canvases show the SAME f(x) curve.
+ * The ONLY visual difference is the derivative curve:
+ *
+ * YOUR MODEL  (coral) — student's wrong derivative
+ *   derivative_scale < 1.0 → shallower curve (e.g. thinks d/dx(x²) = x)
+ *   derivative_scale > 1.0 → steeper curve
+ *   show_derivative = 0    → no derivative shown at all
+ *
+ * EXPERT MODEL (lime) — correct derivative
+ *   derivative_scale = 1.0
+ *   show_derivative  = 1
+ *   Cyan derivative curve follows the correct mathematical slope
+ */
 
-## ROLE
-You are a physics/mathematics/chemistry/biology/CS parameter extractor.
-Produce two parameter objects for a WebGL2 animation simulation:
-- studentParams: parameters matching what the STUDENT described (label: YOUR MODEL)
-- expertParams:  the domain-correct parameters (label: EXPERT MODEL)
+import type {
+  SimTemplate, SimParams, Phase,
+  TemplateGeometry, UniformDescriptor, DrawCall,
+} from "../types";
+import { PHASE_STUDENT } from "../types";
 
-NEVER use the word "wrong" in any output field. The simulation shows both side by side.
-The student draws their own conclusions from seeing the difference.
+const vertexShader = `#version 300 es
+precision highp float;
+in vec2 a_pos;
+out vec2 v_uv;
+void main() {
+  v_uv = a_pos * 0.5 + 0.5;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}`;
 
-## CRITICAL RULE — ALWAYS SIMULATE
-You MUST return simulatable: true for any STEM query.
-Only return simulatable: false if the query is completely off-topic (e.g. "hello", "what is your name").
-If you are unsure which template fits, use "generic". Do NOT refuse to simulate STEM content.
+const fragmentShader = `#version 300 es
+precision highp float;
+in  vec2 v_uv;
+out vec4 fragColor;
 
-## OUTPUT FORMAT
-Respond ONLY with valid JSON. No preamble, no markdown fences.
+uniform float u_time;
+uniform float u_phase;         // 0 = student (coral), 1 = expert (lime)
+uniform vec2  u_resolution;
+uniform float u_func_type;
+uniform float u_amplitude;
+uniform float u_frequency;
+uniform float u_x_offset;
+uniform float u_derivative_scale;
+uniform float u_show_derivative;
 
-{
-  "simulatable": true,
-  "hint": "<template_name>",
-  "label": "<concept name, 2-5 words>",
-  "studentParams": { <template-specific parameters> },
-  "expertParams":  { <template-specific parameters> },
-  "deltas": [
-    { "key": "<param_key>", "label": "<Human readable>", "studentValue": "<string>", "expertValue": "<string>" }
-  ]
+const float PI = 3.14159265359;
+
+// f(x) — same on both canvases
+float evalF(float t) {
+  float xn = (t * 2.0 - 1.0) * PI * u_frequency + u_x_offset;
+  float v;
+  if      (u_func_type < 0.5) v = sin(xn);
+  else if (u_func_type < 1.5) { float k = xn / PI; v = k*k*k - k; }
+  else if (u_func_type < 2.5) { float k = xn / PI; v = k * k; }
+  else                        { v = abs(xn / PI) - 0.5; }
+  return clamp(v * u_amplitude, -1.0, 1.0);
 }
 
-If completely off-topic: { "simulatable": false }
+// True derivative via central difference
+float trueDF(float t) {
+  float h = 0.003;
+  return (evalF(t + h) - evalF(t - h)) / (2.0 * h);
+}
 
-## TEMPLATE SELECTION GUIDE
+void main() {
+  vec2  uv  = v_uv;
+  float ar  = u_resolution.x / u_resolution.y;
+  float t   = uv.x;
+  float wy  = (uv.y - 0.5) * 2.0;
 
-| Subject          | Preferred template | Use when                                    |
-|------------------|--------------------|---------------------------------------------|
-| Physics          | wave               | waves, oscillations, frequency, amplitude   |
-| Physics          | orbital            | planets, orbits, gravity, Kepler            |
-| Mathematics      | graph_plot         | functions, derivatives, integrals, limits   |
-| Mathematics      | transform          | matrices, eigenvectors, linear algebra      |
-| Chemistry        | molecule           | molecules, bonds, angles, atoms             |
-| Biology          | molecule           | DNA, cells, proteins, membranes             |
-| Computer Science | sort               | sorting, searching, algorithms              |
-| Any              | generic            | fallback when no specific template fits     |
+  bool  isExpert = u_phase > 0.5;
 
-## PARAMETER SCHEMAS
+  // Animated point 0→1 every 5 seconds
+  float tAnim = mod(u_time * 0.20, 1.0);
 
-### wave
-{ "frequency": <float>, "amplitude": <float>, "phase_shift": <float radians>,
-  "wave_speed": <float>, "damping": <float 0-1>, "components": <1=single, 2=superposition, 3=standing> }
-Default expert: frequency=1.0, amplitude=1.0, phase_shift=0, wave_speed=1.0, damping=0, components=1
+  // f(x) values
+  float fY      = evalF(t) * 0.55;
+  float fAnimY  = evalF(tAnim) * 0.55;
 
-### orbital
-{ "eccentricity": <float 0-0.9>, "semi_major": <float, default 0.5>,
-  "speed_model": <0=constant speed (misconception), 1=Kepler second law (correct)>, "period": <float seconds> }
-Default expert: eccentricity=0.45, semi_major=0.5, speed_model=1, period=8.0
+  // Derivative values
+  float dfTrue  = trueDF(t) * 0.28;          // correct derivative curve
+  float dfScaled = dfTrue * u_derivative_scale; // student's believed derivative
 
-### transform
-{ "matrix_a": <float>, "matrix_b": <float>, "matrix_c": <float>, "matrix_d": <float>,
-  "eigenval1": <float>, "eigenval2": <float>,
-  "eigenvec1_x": <float>, "eigenvec1_y": <float>, "eigenvec2_x": <float>, "eigenvec2_y": <float>,
-  "eigen_rotation": <float radians — how much student thinks eigenvector rotates; 0 if correct> }
-Default expert: matrix_a=2.0, matrix_b=0.0, matrix_c=0.0, matrix_d=0.5, eigenval1=2.0, eigenval2=0.5,
-               eigenvec1_x=1.0, eigenvec1_y=0.0, eigenvec2_x=0.0, eigenvec2_y=1.0, eigen_rotation=0.0
+  // Which derivative to show on this canvas
+  float derivY  = isExpert ? dfTrue : dfScaled;
 
-### graph_plot
-{ "func_type": <0=sine, 1=cubic, 2=gaussian, 3=absolute_value>,
-  "amplitude": <float>, "frequency": <float>, "x_offset": <float>,
-  "derivative_scale": <float>, "show_derivative": <1=show, 0=hide> }
-Default expert: func_type=1, amplitude=1.0, frequency=1.0, x_offset=0.0, derivative_scale=1.0, show_derivative=1
+  // Colors
+  vec3 mainCol  = isExpert ? vec3(0.784, 1.0, 0.0) : vec3(1.0, 0.239, 0.341);
+  vec3 derivCol = vec3(0.0, 0.898, 1.0);    // cyan for derivative on both
 
-### sort
-{ "algorithm": <"bubble"|"insertion"|"merge"|"quick">, "array_size": <int 6-12> }
-Default expert: algorithm="merge", array_size=8
+  // ── BACKGROUND ──────────────────────────────────────────────────────
+  vec3 col = vec3(0.022, 0.022, 0.055);
 
-### molecule
-{ "molecule_type": <"water"|"methane"|"co2"|"dna"|"cell"|"protein">,
-  "bond_angle": <float degrees> }
-Default expert bond angles: water=104.5, methane=109.5, co2=180.0
+  // ── GRID ────────────────────────────────────────────────────────────
+  vec2 gp = abs(fract(uv * vec2(8.0, 6.0)) - 0.5);
+  float gline = max(smoothstep(0.47, 0.50, gp.x), smoothstep(0.47, 0.50, gp.y));
+  col += vec3(0.04, 0.04, 0.09) * gline;
 
-### generic (fallback — always works)
-{ "node_count": <int, default 8>, "hierarchy": <0=flat student model, 1=hierarchical expert model>,
-  "complexity": <float 0-1> }
-Default expert: node_count=8, hierarchy=1, complexity=0.8
+  // ── AXES ────────────────────────────────────────────────────────────
+  col = mix(col, vec3(0.30, 0.30, 0.50),
+    max(smoothstep(0.006, 0.001, abs(wy)),
+        smoothstep(0.006, 0.001, abs(uv.x - 0.5))) * 0.7);
 
-## RULES
-1. studentParams reflects what the student's query and triples suggest they believe
-2. expertParams uses scientifically accepted values
-3. deltas lists only parameters that ACTUALLY differ between student and expert
-4. If T1 (aligned): studentParams ≈ expertParams, deltas may be empty or minimal
-5. If T3 (misconception): studentParams clearly shows the structural error
-6. label should name the specific concept (e.g. "Orbital Motion", "Derivative as Slope")
-7. When in doubt about parameters, use the schema defaults — a working simulation is always better than simulatable: false
+  // ── FILL AREA under f(x) (grows left with animation) ────────────────
+  float fillMask = step(t, tAnim);
+  float belowF = fY >= 0.0
+    ? step(0.0, wy) * step(wy, fY)
+    : step(fY, wy)  * step(wy, 0.0);
+  col = mix(col, mainCol, fillMask * belowF * 0.18);
 
-## EXAMPLES
+  // ── MAIN CURVE f(x) ─────────────────────────────────────────────────
+  float dF    = abs(wy - fY);
+  float fLine = smoothstep(0.032, 0.003, dF);
+  float fGlow = smoothstep(0.13,  0.000, dF) * 0.30;
+  col = mix(col, mainCol,        fGlow);
+  col = mix(col, mainCol + 0.15, fLine);
 
-### Example 1: Orbital — constant speed misconception
-Query: "planets move around the sun at the same speed throughout their orbit"
-Subject: physics | Hint: orbital | Tier: T3
+  // ── DERIVATIVE CURVE ────────────────────────────────────────────────
+  if (u_show_derivative > 0.5) {
+    float dD    = abs(wy - derivY);
+    float dLine = smoothstep(0.024, 0.003, dD);
+    float dGlow = smoothstep(0.10,  0.000, dD) * 0.22;
 
-Output:
-{"simulatable":true,"hint":"orbital","label":"Orbital Motion","studentParams":{"eccentricity":0.0,"semi_major":0.5,"speed_model":0,"period":8.0},"expertParams":{"eccentricity":0.45,"semi_major":0.5,"speed_model":1,"period":8.0},"deltas":[{"key":"eccentricity","label":"Orbit shape","studentValue":"Circle (e=0)","expertValue":"Ellipse (e=0.45)"},{"key":"speed_model","label":"Speed variation","studentValue":"Constant speed","expertValue":"Faster near star (Kepler 2nd law)"}]}
+    // Student derivative: dashed to signal "this is what you believe"
+    float solid = isExpert ? 1.0 : step(0.45, fract(t * 10.0));
+    col = mix(col, derivCol,        dGlow);
+    col = mix(col, derivCol + 0.10, dLine * solid);
+  }
 
-### Example 2: Transform — eigenvector rotation misconception
-Query: "when you apply a matrix transformation, the eigenvectors rotate to align with the output"
-Subject: mathematics | Hint: transform | Tier: T3
+  // ── TANGENT LINE at animated dot ─────────────────────────────────────
+  {
+    float slope   = trueDF(tAnim) * u_derivative_scale * 0.55;
+    float animWX  = (tAnim - 0.5) * 2.0 * ar;
+    float wx      = (uv.x - 0.5) * 2.0 * ar;
+    float tangY   = fAnimY + slope * (wx - animWX);
 
-Output:
-{"simulatable":true,"hint":"transform","label":"Eigenvector Behaviour","studentParams":{"matrix_a":2.0,"matrix_b":0.0,"matrix_c":0.0,"matrix_d":0.5,"eigenval1":2.0,"eigenval2":0.5,"eigenvec1_x":1.0,"eigenvec1_y":0.0,"eigenvec2_x":0.0,"eigenvec2_y":1.0,"eigen_rotation":0.785},"expertParams":{"matrix_a":2.0,"matrix_b":0.0,"matrix_c":0.0,"matrix_d":0.5,"eigenval1":2.0,"eigenval2":0.5,"eigenvec1_x":1.0,"eigenvec1_y":0.0,"eigenvec2_x":0.0,"eigenvec2_y":1.0,"eigen_rotation":0.0},"deltas":[{"key":"eigen_rotation","label":"Eigenvector direction after transform","studentValue":"Rotates by 45 degrees","expertValue":"Stays on same line (only scales)"}]}
+    // Clip BOTH horizontally (fixed range around dot) AND vertically.
+    // Without the Y-clip, steep derivatives on the expert canvas (derivative_scale=1.0)
+    // shoot the tangent line far below/above the visible area — looks like a bug.
+    // The student canvas (derivative_scale=0.5) stays in bounds but expert doesn't.
+    float inRangeX = step(abs(wx - animWX), 0.38 * ar);
+    float inRangeY = step(abs(tangY), 0.92);   // clip at ±92% canvas height
+    float inRange  = inRangeX * inRangeY;
 
-### Example 3: Molecule — water bond angle
-Query: "in water, the bond angle between the two hydrogen atoms is 90 degrees"
-Subject: chemistry | Hint: molecule | Tier: T2
+    float dTang   = abs(wy - tangY);
+    float tLine   = smoothstep(0.018, 0.003, dTang) * inRange;
+    col = mix(col, derivCol + 0.15, tLine * 0.9);
+    col += derivCol * smoothstep(0.06, 0.0, dTang) * inRange * 0.15;
+  }
 
-Output:
-{"simulatable":true,"hint":"molecule","label":"Water Bond Angle","studentParams":{"molecule_type":"water","bond_angle":90.0},"expertParams":{"molecule_type":"water","bond_angle":104.5},"deltas":[{"key":"bond_angle","label":"H-O-H bond angle","studentValue":"90 degrees","expertValue":"104.5 degrees (VSEPR lone pair repulsion)"}]}
+  // ── ANIMATED DOT ─────────────────────────────────────────────────────
+  {
+    float dotWX = (tAnim - 0.5) * 2.0 * ar;
+    float wx    = (uv.x - 0.5) * 2.0 * ar;
+    float dotD  = length(vec2(wx - dotWX, wy - fAnimY));
+    float pulse = 0.65 + 0.35 * sin(u_time * 7.0);
+    col = mix(col, vec3(1.0, 0.92, 0.1), smoothstep(0.030, 0.003, dotD));
+    col += vec3(1.0, 0.85, 0.0) * smoothstep(0.09, 0.0, dotD) * 0.35 * pulse;
+  }
 
-### Example 4: graph_plot — differentiation/integration (your exact test case)
-Query: "differentiation is an inverse process of integration"
-Subject: mathematics | Hint: graph_plot | Tier: T2
+  // ── VIGNETTE ────────────────────────────────────────────────────────
+  vec2 vd = (uv - 0.5) * 2.0;
+  col *= 1.0 - dot(vd, vd) * 0.22;
 
-Output:
-{"simulatable":true,"hint":"graph_plot","label":"Differentiation & Integration","studentParams":{"func_type":1,"amplitude":1.0,"frequency":1.0,"x_offset":0.0,"derivative_scale":1.0,"show_derivative":0},"expertParams":{"func_type":1,"amplitude":1.0,"frequency":1.0,"x_offset":0.0,"derivative_scale":1.0,"show_derivative":1},"deltas":[{"key":"show_derivative","label":"Derivative shown","studentValue":"Hidden — relationship implied","expertValue":"Visible — derivative is the slope of integral's antiderivative"}]}
+  fragColor = vec4(col, 1.0);
+}`;
 
-### Example 5: Wave — amplitude affects speed misconception
-Query: "higher amplitude sound waves travel faster"
-Subject: physics | Hint: wave | Tier: T3
+function buildGeometry(_p: SimParams, _ph: Phase): TemplateGeometry {
+  const v = new Float32Array([-1,-1, 1,-1, -1,1, 1,-1, 1,1, -1,1]);
+  return { vertices: v, attribs: [{ name: "a_pos", size: 2, offset: 0, stride: 8 }] };
+}
 
-Output:
-{"simulatable":true,"hint":"wave","label":"Sound Wave Speed","studentParams":{"frequency":1.0,"amplitude":2.0,"phase_shift":0,"wave_speed":2.0,"damping":0,"components":1},"expertParams":{"frequency":1.0,"amplitude":2.0,"phase_shift":0,"wave_speed":1.0,"damping":0,"components":1},"deltas":[{"key":"wave_speed","label":"Wave speed","studentValue":"Faster at higher amplitude (speed=2.0)","expertValue":"Constant regardless of amplitude (speed=1.0)"}]}
+function getUniforms(params: SimParams, phase: Phase, _t: number): UniformDescriptor[] {
+  const s = phase === PHASE_STUDENT;
+  return [
+    { name: "u_func_type",        type: "1f", value: Number(params.func_type        ?? 2)   },
+    { name: "u_amplitude",        type: "1f", value: Number(params.amplitude        ?? 1.0) },
+    { name: "u_frequency",        type: "1f", value: Number(params.frequency        ?? 0.8) },
+    { name: "u_x_offset",         type: "1f", value: Number(params.x_offset         ?? 0.0) },
+    { name: "u_derivative_scale", type: "1f", value: Number(params.derivative_scale ?? (s ? 0.5 : 1.0)) },
+    { name: "u_show_derivative",  type: "1f", value: Number(params.show_derivative  ?? 1)   },
+  ];
+}
 
-### Example 6: generic fallback — vague STEM query
-Query: "what is entropy"
-Subject: physics | Hint: generic | Tier: T4
+function drawCall(_ph: Phase): DrawCall {
+  return { mode: 0x0004, count: 6 };
+}
 
-Output:
-{"simulatable":true,"hint":"generic","label":"Entropy","studentParams":{"node_count":4,"hierarchy":0,"complexity":0.3},"expertParams":{"node_count":8,"hierarchy":1,"complexity":0.8},"deltas":[{"key":"hierarchy","label":"Conceptual structure","studentValue":"Flat — single concept","expertValue":"Hierarchical — disorder, probability, thermodynamics"},{"key":"complexity","label":"Conceptual depth","studentValue":"Low (0.3)","expertValue":"High (0.8)"}]}
+const graphPlotTemplate: SimTemplate = {
+  hint: "graph_plot", label: "Function & Derivative",
+  subjects: ["mathematics"],
+  buildGeometry, getUniforms, drawCall, vertexShader, fragmentShader,
+};
+export default graphPlotTemplate;

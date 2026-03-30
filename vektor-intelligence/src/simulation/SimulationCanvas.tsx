@@ -2,11 +2,14 @@
 /**
  * src/simulation/SimulationCanvas.tsx
  * Single WebGL2 canvas — phase=0 = YOUR MODEL, phase=1 = EXPERT MODEL
+ *
+ * FIX: when `phase` prop changes (overlay mode toggle), the engine's internal
+ * phase is updated immediately so colors and params stay correct.
  */
 import { useEffect, useRef, useState } from "react";
 import { SimulationEngine } from "./SimulationEngine";
 import type { SimulationData, Phase, EngineStatus } from "./types";
-import { PHASE_LABEL, PHASE_COLOR, PHASE_STUDENT } from "./types";
+import { PHASE_LABEL, PHASE_COLOR } from "./types";
 
 interface Props { data: SimulationData | null; phase: Phase; width?: number; height?: number; }
 
@@ -18,6 +21,7 @@ export function SimulationCanvas({ data, phase, width = 480, height = 400 }: Pro
   const label = PHASE_LABEL[phase];
   const color = PHASE_COLOR[phase];
 
+  // Create engine once on mount
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -26,6 +30,23 @@ export function SimulationCanvas({ data, phase, width = 480, height = 400 }: Pro
     return () => { engine.destroy(); engineRef.current = null; };
   }, []); // eslint-disable-line
 
+  // ── FIX: update engine phase when prop changes (overlay mode) ──────────────
+  // When the user switches from side-by-side to overlay-expert, React reuses
+  // this component instance — the engine is NOT recreated. Without this effect,
+  // the engine keeps its original phase=0, rendering student colors on the
+  // expert canvas. This effect syncs the engine phase and reloads with the
+  // correct params/colors whenever the phase prop changes.
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.setPhase(phase);
+    // If data is already loaded, reload immediately so colors update
+    if (data) {
+      engine.load(data).then(() => engine.start());
+    }
+  }, [phase]); // eslint-disable-line
+
+  // Load data when it arrives
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine || !data) return;

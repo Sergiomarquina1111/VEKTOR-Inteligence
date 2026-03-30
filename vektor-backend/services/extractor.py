@@ -21,10 +21,27 @@ _EXTRACTION_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 
 # ─── Allowed values ───────────────────────────────────────────────────────────
 VALID_SUBJECTS = {"mathematics", "physics", "chemistry", "biology", "computer_science"}
-VALID_RELATIONS = {"requires", "leads_to", "is_defined_as", "is_opposite_of",
-                   "is_type_of", "causes", "equals", "part_of"}
-VALID_HINTS = {"orbital", "wave", "force", "transform", "graph_plot",
-               "geometry", "sort", "graph_traversal", "molecular", "reaction"}
+
+# Relations that Gemini commonly returns — accept all, fallback to leads_to
+VALID_RELATIONS = {
+    "requires", "leads_to", "is_defined_as", "is_opposite_of",
+    "is_type_of", "causes", "equals", "part_of", "has", "is",
+    "produces", "gives", "defines", "implies", "contradicts",
+    "is_equal_to", "is_derived_from", "is_inverse_of", "depends_on",
+    "applies_to", "results_in", "is_related_to", "determines",
+}
+
+# ALL simulation hints the engine supports
+VALID_HINTS = {
+    "orbital", "wave", "force", "em_field", "quantum",
+    "transform", "graph_plot", "graph_topology", "series", "vector_field",
+    "molecule", "reaction", "bond", "periodic",
+    "dna", "cell", "protein", "membrane",
+    "sort", "graph_traversal", "neural_net", "algorithm", "data_structure",
+    "geometry", "molecular",  # legacy names kept
+    "generic",
+}
+
 SUBJECT_ALIASES = {
     "math": "mathematics", "maths": "mathematics",
     "cs": "computer_science", "comp sci": "computer_science",
@@ -59,38 +76,56 @@ def _clean_json(raw: str) -> str:
 # ─── Validation ───────────────────────────────────────────────────────────────
 
 def _validate_and_normalise(data: dict) -> dict:
-    required = {"subject", "subjectConfidence", "triples", "simulatable", "simulationHint"}
-    missing = required - data.keys()
-    if missing:
-        raise ValueError(f"Missing required keys: {missing}")
-
-    subject = str(data["subject"]).lower().strip()
+    # Subject
+    subject = str(data.get("subject", "mathematics")).lower().strip()
     subject = SUBJECT_ALIASES.get(subject, subject)
     if subject not in VALID_SUBJECTS:
-        raise ValueError(f"Unknown subject: {subject!r}")
+        subject = "mathematics"  # safe default rather than raising
     data["subject"] = subject
 
-    data["subjectConfidence"] = max(0.0, min(1.0, float(data["subjectConfidence"])))
+    # Confidence
+    data["subjectConfidence"] = max(0.0, min(1.0, float(data.get("subjectConfidence", 0.7))))
 
-    if not isinstance(data["triples"], list):
-        raise ValueError("triples must be a list")
+    # Triples — lenient: accept any triple that has at least subject+object
+    raw_triples = data.get("triples", [])
+    if not isinstance(raw_triples, list):
+        raw_triples = []
 
     cleaned = []
-    for t in data["triples"][:8]:
-        if not all(k in t for k in ("subject", "relation", "object", "confidence")):
+    for t in raw_triples[:8]:
+        if not isinstance(t, dict):
             continue
-        t["subject"]    = str(t["subject"]).lower().strip()
-        t["object"]     = str(t["object"]).lower().strip()
-        relation        = str(t["relation"]).lower().strip()
-        t["relation"]   = relation if relation in VALID_RELATIONS else "leads_to"
-        t["confidence"] = max(0.0, min(1.0, float(t.get("confidence", 0.5))))
-        cleaned.append(t)
+        # Must have at minimum a subject and object (relation optional)
+        subj = t.get("subject") or t.get("source") or t.get("node1")
+        obj  = t.get("object") or t.get("target") or t.get("node2")
+        if not subj or not obj:
+            continue
+        relation = str(t.get("relation", "leads_to")).lower().strip()
+        if relation not in VALID_RELATIONS:
+            relation = "leads_to"  # normalise unknown relations
+        confidence = max(0.0, min(1.0, float(t.get("confidence", 0.75))))
+        cleaned.append({
+            "subject":    str(subj).lower().strip(),
+            "relation":   relation,
+            "object":     str(obj).lower().strip(),
+            "confidence": confidence,
+        })
     data["triples"] = cleaned
 
+    # Simulation hint
     data["simulatable"] = bool(data.get("simulatable", False))
     hint = data.get("simulationHint")
-    data["simulationHint"] = hint if (data["simulatable"] and hint in VALID_HINTS) else None
+    # Accept hint if simulatable flag is set AND hint is valid
+    # But also accept hint even if simulatable=False — main.py resolves this now
+    if hint and hint in VALID_HINTS:
+        data["simulationHint"] = hint
+        data["simulatable"]    = True   # if hint is valid, mark as simulatable
+    else:
+        data["simulationHint"] = None
+        # Don't force simulatable=False — main.py uses subject default hint anyway
 
+    logger.info("Validated: subject=%s triples=%d simulatable=%s hint=%s",
+                data["subject"], len(cleaned), data["simulatable"], data.get("simulationHint"))
     return data
 
 
@@ -102,12 +137,12 @@ async def _call_gemini(query: str) -> dict:
 
     response = await asyncio.to_thread(
         client.models.generate_content,
-        model="gemini-2.5-flash-lite",
+        model="gemini-2.5-flash",
         contents=full_prompt,
     )
 
     raw = response.text
-    logger.debug("Gemini raw response: %.200s", raw)
+    logger.debug("Gemini raw response: %.300s", raw)
     cleaned = _clean_json(raw)
     data = json.loads(cleaned)
     return _validate_and_normalise(data)
@@ -144,11 +179,11 @@ async def extract_triples(query: str, subject_override: Optional[str] = None) ->
 def _fallback_extraction(query: str, subject_override: Optional[str]) -> dict:
     """Deterministic fallback — zero triples → comparator classifies as T4."""
     return {
-        "subject": subject_override or "mathematics",
+        "subject":           subject_override or "mathematics",
         "subjectConfidence": 0.5,
-        "triples": [],
-        "simulatable": False,
-        "simulationHint": None,
+        "triples":           [],
+        "simulatable":       False,
+        "simulationHint":    None,
     }
 
 
