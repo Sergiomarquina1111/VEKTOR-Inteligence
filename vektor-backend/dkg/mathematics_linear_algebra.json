@@ -1,599 +1,284 @@
 {
   "subject": "mathematics",
   "subtopic": "linear_algebra",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "publishedAt": "2026-03-31T00:00:00Z",
+  "researcherId": "system",
   "nodeCount": 22,
-  "edgeCount": 39,
   "nodes": [
     {
       "id": "vectors",
       "label": "Vectors",
-      "description": "Ordered tuples of numbers representing magnitude and direction in n-dimensional space.",
+      "subject": "mathematics",
       "tier": "foundational",
-      "aliases": [
-        "vector",
-        "column vector",
-        "row vector",
-        "n-tuple"
-      ],
-      "prerequisites": []
+      "prerequisites": [],
+      "successors": ["vector_operations", "linear_combinations", "dot_product"],
+      "description": "A vector is a mathematical object with both magnitude and direction. In Rⁿ, a vector is an ordered list of n numbers called components. Vectors can represent positions, displacements, forces, velocities. Two vectors are equal only if all components are equal. The zero vector has magnitude 0. Geometrically, vectors are arrows in space.",
+      "aliases": ["vector", "vectors", "column vector", "row vector", "n-dimensional vector", "vector in R^n", "Rn vector", "arrow in space", "magnitude and direction", "ordered list of numbers", "components", "vector components", "i j k", "basis vector notation"]
     },
     {
-      "id": "vector_spaces",
-      "label": "Vector Spaces",
-      "description": "A set with addition and scalar multiplication satisfying 8 axioms (closure, associativity, identity, inverse, distributivity).",
+      "id": "vector_operations",
+      "label": "Vector Operations",
+      "subject": "mathematics",
       "tier": "foundational",
-      "aliases": [
-        "vector space",
-        "linear space",
-        "real vector space"
-      ],
-      "prerequisites": [
-        "vectors",
-        "scalar_multiplication"
-      ]
-    },
-    {
-      "id": "scalar_multiplication",
-      "label": "Scalar Multiplication",
-      "description": "Multiplication of a vector by a scalar, scaling its magnitude.",
-      "tier": "foundational",
-      "aliases": [
-        "scaling",
-        "scalar product"
-      ],
-      "prerequisites": [
-        "vectors"
-      ]
+      "prerequisites": ["vectors"],
+      "successors": ["linear_combinations", "dot_product", "cross_product"],
+      "description": "Vectors support addition (component-wise), subtraction, and scalar multiplication. Vector addition is commutative and associative. Scalar multiplication scales the magnitude without changing direction (unless the scalar is negative, which reverses direction). These operations form the algebraic foundation of vector spaces.",
+      "aliases": ["vector addition", "vector subtraction", "scalar multiplication", "component-wise addition", "vector scaling", "adding vectors", "subtracting vectors", "multiplying vector by scalar", "vector sum", "linear operations on vectors"]
     },
     {
       "id": "dot_product",
       "label": "Dot Product",
-      "description": "The sum of products of corresponding components of two vectors. Measures alignment.",
+      "subject": "mathematics",
       "tier": "foundational",
-      "aliases": [
-        "inner product",
-        "scalar product",
-        "dot",
-        "euclidean inner product"
-      ],
-      "prerequisites": [
-        "vectors"
-      ]
+      "prerequisites": ["vectors", "vector_operations"],
+      "successors": ["orthogonality", "projections", "matrix_multiplication"],
+      "description": "The dot product of two vectors a·b = |a||b|cosθ = Σaᵢbᵢ. It produces a scalar. Key property: if a·b = 0, the vectors are orthogonal (perpendicular). The dot product measures how much two vectors point in the same direction. It is used to find angles between vectors, compute projections, and test orthogonality.",
+      "aliases": ["dot product", "inner product", "scalar product", "a·b", "a dot b", "cosine similarity", "a·b = |a||b|cosθ", "sum of component products", "projection formula", "orthogonality test", "Σaᵢbᵢ"]
+    },
+    {
+      "id": "cross_product",
+      "label": "Cross Product",
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["vectors", "dot_product"],
+      "successors": ["determinant"],
+      "description": "The cross product a×b produces a vector perpendicular to both a and b with magnitude |a||b|sinθ. Only defined in R³. The result's direction follows the right-hand rule. |a×b| equals the area of the parallelogram spanned by a and b. If a×b = 0, the vectors are parallel. It is anti-commutative: a×b = −(b×a).",
+      "aliases": ["cross product", "a×b", "a cross b", "vector product", "perpendicular vector", "right hand rule", "area of parallelogram", "|a||b|sinθ", "anti-commutative product", "normal vector"]
+    },
+    {
+      "id": "linear_combinations",
+      "label": "Linear Combinations and Span",
+      "subject": "mathematics",
+      "tier": "foundational",
+      "prerequisites": ["vectors", "vector_operations"],
+      "successors": ["linear_independence", "basis", "subspaces"],
+      "description": "A linear combination of vectors is c₁v₁ + c₂v₂ + ... + cₙvₙ where cᵢ are scalars. The span of a set of vectors is all possible linear combinations — it is a subspace. Understanding span is critical for understanding what vectors can and cannot reach.",
+      "aliases": ["linear combination", "span", "linear span", "span of vectors", "c₁v₁ + c₂v₂", "weighted sum of vectors", "all linear combinations", "reachable vectors", "spanned subspace"]
     },
     {
       "id": "linear_independence",
       "label": "Linear Independence",
-      "description": "A set of vectors is linearly independent if no vector is a linear combination of the others.",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "linearly independent",
-        "independent vectors",
-        "lin. ind."
-      ],
-      "prerequisites": [
-        "vectors",
-        "vector_spaces",
-        "linear_combinations"
-      ]
-    },
-    {
-      "id": "linear_combinations",
-      "label": "Linear Combinations",
-      "description": "A sum of scalar multiples of vectors: c1*v1 + c2*v2 + ... + cn*vn.",
-      "tier": "foundational",
-      "aliases": [
-        "linear combination",
-        "weighted sum"
-      ],
-      "prerequisites": [
-        "vectors",
-        "scalar_multiplication"
-      ]
-    },
-    {
-      "id": "span",
-      "label": "Span",
-      "description": "The set of all possible linear combinations of a set of vectors.",
-      "tier": "intermediate",
-      "aliases": [
-        "linear span",
-        "span of vectors"
-      ],
-      "prerequisites": [
-        "vectors",
-        "linear_combinations"
-      ]
-    },
-    {
-      "id": "basis",
-      "label": "Basis",
-      "description": "A linearly independent set of vectors that spans the vector space.",
-      "tier": "intermediate",
-      "aliases": [
-        "basis vectors",
-        "vector basis",
-        "orthonormal basis"
-      ],
-      "prerequisites": [
-        "linear_independence",
-        "span",
-        "vector_spaces"
-      ]
-    },
-    {
-      "id": "dimension",
-      "label": "Dimension",
-      "description": "The number of vectors in a basis of a vector space. Invariant across all bases.",
-      "tier": "intermediate",
-      "aliases": [
-        "dim",
-        "dimensionality"
-      ],
-      "prerequisites": [
-        "basis"
-      ]
+      "prerequisites": ["linear_combinations", "vectors"],
+      "successors": ["basis", "rank", "determinant"],
+      "description": "Vectors v₁,...,vₙ are linearly independent if the only solution to c₁v₁+...+cₙvₙ=0 is c₁=c₂=...=cₙ=0. Intuitively: no vector in the set can be written as a linear combination of the others. A set is linearly dependent if any vector is redundant. Independence is a prerequisite for forming a basis.",
+      "aliases": ["linear independence", "linearly independent", "linearly dependent", "independence", "dependence", "redundant vectors", "trivial solution only", "non-trivial solution", "c1v1+c2v2=0", "independent set"]
     },
     {
       "id": "matrices",
       "label": "Matrices",
-      "description": "Rectangular arrays of numbers representing linear transformations between vector spaces.",
+      "subject": "mathematics",
       "tier": "foundational",
-      "aliases": [
-        "matrix",
-        "rectangular matrix",
-        "square matrix",
-        "2D array",
-        "2x2 matrix",
-        "array of numbers",
-        "matrix of coefficients"
-      ],
-      "prerequisites": [
-        "vectors"
-      ]
+      "prerequisites": ["vectors"],
+      "successors": ["matrix_multiplication", "determinant", "linear_transformations"],
+      "description": "A matrix is a rectangular array of numbers arranged in rows and columns. An m×n matrix has m rows and n columns. Matrices represent linear transformations, systems of equations, and data. Matrix addition is component-wise. Scalar multiplication scales every entry. The transpose of A (written Aᵀ) flips rows and columns.",
+      "aliases": ["matrix", "matrices", "m by n matrix", "m×n matrix", "rectangular array", "rows and columns", "matrix entry", "transpose", "Aᵀ", "2x2 matrix", "3x3 matrix", "square matrix", "identity matrix", "zero matrix", "matrix addition"]
     },
     {
       "id": "matrix_multiplication",
       "label": "Matrix Multiplication",
-      "description": "Composition of two linear transformations. (AB)ij = sum of row i of A times column j of B.",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "matrix product",
-        "matmul",
-        "matrix times matrix"
-      ],
-      "prerequisites": [
-        "matrices",
-        "dot_product"
-      ]
+      "prerequisites": ["matrices", "dot_product"],
+      "successors": ["determinant", "linear_transformations", "eigenvalues"],
+      "description": "Matrix multiplication (AB)ᵢⱼ = row i of A · column j of B (dot product). An m×n matrix times an n×p matrix produces an m×p matrix. Matrix multiplication is not commutative: AB ≠ BA in general. It IS associative: (AB)C = A(BC). It represents composition of linear transformations.",
+      "aliases": ["matrix multiplication", "matrix product", "AB", "non-commutative multiplication", "row times column", "(AB)ij", "matrix composition", "product of matrices", "matrix times matrix", "matrix times vector", "Ax"]
     },
     {
       "id": "determinant",
       "label": "Determinant",
-      "description": "A scalar that encodes how a matrix scales volume. Zero determinant = singular matrix.",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "det",
-        "det(A)",
-        "determinant of a matrix",
-        "determinant of matrix",
-        "scalar value of matrix",
-        "matrix determinant"
-      ],
-      "prerequisites": [
-        "matrices",
-        "matrix_multiplication"
-      ]
+      "prerequisites": ["matrices", "matrix_multiplication", "linear_independence"],
+      "successors": ["eigenvalues", "inverse_matrix"],
+      "description": "The determinant det(A) is a scalar encoding properties of a square matrix. |det(A)| gives the volume scaling factor of the transformation. det(A) = 0 iff the matrix is singular (non-invertible, collapses space). det(AB) = det(A)·det(B). For 2×2: det = ad−bc. Negative determinant means orientation is reversed.",
+      "aliases": ["determinant", "det(A)", "det A", "|A|", "ad minus bc", "volume scaling", "singular matrix", "non-invertible", "zero determinant", "area scaling", "orientation", "cofactor expansion", "det = 0"]
     },
     {
-      "id": "rank",
-      "label": "Rank",
-      "description": "The dimension of the column space (or row space) of a matrix. Equals number of pivot columns.",
+      "id": "inverse_matrix",
+      "label": "Matrix Inverse",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "matrix rank",
-        "rank of a matrix",
-        "column rank",
-        "row rank"
-      ],
-      "prerequisites": [
-        "matrices",
-        "linear_independence",
-        "dimension"
-      ]
-    },
-    {
-      "id": "null_space",
-      "label": "Null Space",
-      "description": "The set of all vectors x such that Ax = 0. Also called the kernel.",
-      "tier": "intermediate",
-      "aliases": [
-        "kernel",
-        "ker(A)",
-        "nullspace",
-        "null space of a matrix"
-      ],
-      "prerequisites": [
-        "matrices",
-        "vector_spaces",
-        "linear_independence"
-      ]
+      "prerequisites": ["determinant", "matrix_multiplication"],
+      "successors": ["linear_transformations", "eigenvalues"],
+      "description": "A square matrix A has an inverse A⁻¹ if and only if det(A) ≠ 0. A·A⁻¹ = A⁻¹·A = I (identity matrix). The inverse undoes the transformation. For 2×2: A⁻¹ = (1/det(A))·[[d,−b],[−c,a]]. A matrix without an inverse is called singular. (AB)⁻¹ = B⁻¹A⁻¹.",
+      "aliases": ["matrix inverse", "A inverse", "A⁻¹", "invertible matrix", "non-singular matrix", "singular matrix", "AA⁻¹ = I", "inverse transformation", "undoing transformation"]
     },
     {
       "id": "linear_transformations",
       "label": "Linear Transformations",
-      "description": "Functions between vector spaces preserving addition and scalar multiplication: T(u+v)=T(u)+T(v).",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "linear map",
-        "linear operator",
-        "linear mapping",
-        "transformation matrix",
-        "matrix transformation",
-        "maps vectors"
-      ],
-      "prerequisites": [
-        "vector_spaces",
-        "matrices"
-      ]
+      "prerequisites": ["matrices", "matrix_multiplication", "vectors"],
+      "successors": ["eigenvalues", "eigenvectors", "rank"],
+      "description": "A linear transformation T: Rⁿ → Rᵐ satisfies T(u+v) = T(u)+T(v) and T(cu) = cT(u). Every linear transformation can be represented as a matrix: T(x) = Ax. Transformations include rotation, scaling, shear, reflection, and projection. The image of a transformation is its range; the kernel is the set of vectors mapped to zero.",
+      "aliases": ["linear transformation", "linear map", "linear function", "T(x) = Ax", "matrix transformation", "rotation matrix", "scaling transformation", "shear transformation", "reflection", "projection", "kernel", "null space", "image", "range of transformation", "linear operator"]
     },
     {
-      "id": "eigenvalues",
-      "label": "Eigenvalues",
-      "description": "Scalar \u03bb such that Av = \u03bbv for some non-zero vector v. Found by solving det(A - \u03bbI) = 0.",
-      "tier": "advanced",
-      "aliases": [
-        "eigenvalue",
-        "characteristic value",
-        "lambda",
-        "spectral value",
-        "eigen value",
-        "characteristic root",
-        "latent root",
-        "scales eigenvector",
-        "scalar factor"
-      ],
-      "prerequisites": [
-        "matrices",
-        "determinant",
-        "linear_transformations"
-      ]
+      "id": "basis",
+      "label": "Basis and Dimension",
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["linear_independence", "linear_combinations", "subspaces"],
+      "successors": ["rank", "eigenvalues"],
+      "description": "A basis for a vector space is a linearly independent set that spans the space. The standard basis for Rⁿ is {e₁, e₂, ..., eₙ}. Every vector in the space has a unique representation as a linear combination of basis vectors. The dimension of a space equals the number of vectors in any basis. Different bases represent the same space differently.",
+      "aliases": ["basis", "basis vectors", "standard basis", "e1 e2 e3", "dimension", "dim", "basis for R^n", "orthonormal basis", "change of basis", "coordinate system", "basis representation", "spanning set", "minimal spanning set"]
     },
     {
-      "id": "eigenvectors",
-      "label": "Eigenvectors",
-      "description": "Non-zero vectors that only scale (not rotate) under a linear transformation: Av = \u03bbv.",
-      "tier": "advanced",
-      "aliases": [
-        "eigenvector",
-        "characteristic vector",
-        "eigen vector",
-        "direction-invariant vector",
-        "invariant direction",
-        "vector that does not change direction"
-      ],
-      "prerequisites": [
-        "eigenvalues",
-        "null_space",
-        "matrices"
-      ]
-    },
-    {
-      "id": "diagonalization",
-      "label": "Diagonalization",
-      "description": "Writing a matrix as A = PDP\u207b\u00b9 where D is diagonal and P contains eigenvectors as columns.",
-      "tier": "advanced",
-      "aliases": [
-        "diagonalise",
-        "diagonalize",
-        "eigendecomposition"
-      ],
-      "prerequisites": [
-        "eigenvectors",
-        "eigenvalues",
-        "matrix_multiplication"
-      ]
+      "id": "subspaces",
+      "label": "Subspaces",
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["linear_combinations", "vectors"],
+      "successors": ["basis", "rank", "orthogonality"],
+      "description": "A subspace of Rⁿ is a subset that is closed under addition and scalar multiplication and contains the zero vector. Examples: the null space of a matrix, the column space. Every subspace has a basis and a dimension. The four fundamental subspaces of a matrix (column space, null space, row space, left null space) are central to understanding linear systems.",
+      "aliases": ["subspace", "vector subspace", "closed under addition", "null space", "column space", "row space", "left null space", "fundamental subspaces", "four fundamental subspaces", "ker A", "im A"]
     },
     {
       "id": "orthogonality",
       "label": "Orthogonality",
-      "description": "Two vectors are orthogonal if their dot product is zero. Orthogonal matrices preserve lengths and angles.",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "orthogonal",
-        "perpendicular vectors",
-        "orthonormal"
-      ],
-      "prerequisites": [
-        "dot_product",
-        "vectors"
-      ]
+      "prerequisites": ["dot_product", "subspaces"],
+      "successors": ["projections", "svd"],
+      "description": "Two vectors are orthogonal if their dot product is zero (a·b = 0). An orthogonal set has all pairs orthogonal. An orthonormal set is orthogonal with all unit vectors. Orthonormal bases are computationally convenient: the coefficients in the expansion are just dot products. The Gram-Schmidt process converts any basis to an orthonormal one.",
+      "aliases": ["orthogonal", "orthogonality", "perpendicular vectors", "a·b = 0", "orthonormal", "orthonormal basis", "gram-schmidt", "orthogonal complement", "normal vector", "unit vector", "normalized vector"]
     },
     {
       "id": "projections",
       "label": "Projections",
-      "description": "The projection of vector b onto vector a gives the component of b in the direction of a.",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "vector projection",
-        "orthogonal projection",
-        "projection onto subspace"
-      ],
-      "prerequisites": [
-        "dot_product",
-        "orthogonality",
-        "vectors"
-      ]
+      "prerequisites": ["dot_product", "orthogonality"],
+      "successors": ["svd"],
+      "description": "The projection of vector b onto vector a is: proj_a(b) = (a·b/|a|²)a. Projection onto a subspace V finds the closest point in V to b. Least squares solutions minimize ||Ax−b||², found via the normal equations AᵀAx = Aᵀb. Projection is fundamental to least squares, regression, and dimensionality reduction.",
+      "aliases": ["projection", "vector projection", "project b onto a", "proj_a(b)", "least squares", "normal equations", "AᵀAx = Aᵀb", "closest vector", "orthogonal projection", "projection onto subspace"]
     },
     {
-      "id": "least_squares",
-      "label": "Least Squares",
-      "description": "Minimizes ||Ax - b||\u00b2 when Ax = b has no exact solution. Solution via normal equations: A\u1d40Ax = A\u1d40b.",
+      "id": "rank",
+      "label": "Rank",
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["linear_independence", "linear_transformations", "basis"],
+      "successors": ["eigenvalues", "svd"],
+      "description": "The rank of a matrix is the number of linearly independent rows (or columns) — the dimension of the column space. Rank-nullity theorem: rank(A) + nullity(A) = n (number of columns). A full-rank matrix has rank = min(m,n). Rank determines whether a linear system has solutions and whether a matrix is invertible.",
+      "aliases": ["rank", "rank of matrix", "rank A", "rank(A)", "column rank", "row rank", "rank-nullity theorem", "nullity", "full rank", "rank deficient", "dimension of column space", "dimension of image"]
+    },
+    {
+      "id": "eigenvalues",
+      "label": "Eigenvalues",
+      "subject": "mathematics",
       "tier": "advanced",
-      "aliases": [
-        "least squares solution",
-        "normal equations",
-        "linear regression",
-        "OLS"
-      ],
-      "prerequisites": [
-        "projections",
-        "matrix_multiplication",
-        "rank"
-      ]
+      "prerequisites": ["determinant", "linear_transformations", "matrix_multiplication"],
+      "successors": ["eigenvectors", "diagonalization"],
+      "description": "An eigenvalue λ of matrix A satisfies det(A − λI) = 0 (the characteristic equation). Eigenvalues are the scalars by which eigenvectors are stretched or shrunk under the transformation. The set of all eigenvalues is the spectrum of the matrix. Trace(A) = sum of eigenvalues. det(A) = product of eigenvalues. Complex eigenvalues come in conjugate pairs for real matrices.",
+      "aliases": ["eigenvalue", "eigenvalues", "λ", "lambda", "characteristic value", "characteristic root", "characteristic equation", "det(A - λI) = 0", "spectrum", "spectral radius", "trace equals sum of eigenvalues", "det equals product of eigenvalues", "characteristic polynomial", "scaling factor of eigenvector"]
+    },
+    {
+      "id": "eigenvectors",
+      "label": "Eigenvectors",
+      "subject": "mathematics",
+      "tier": "advanced",
+      "prerequisites": ["eigenvalues", "linear_transformations", "linear_independence"],
+      "successors": ["diagonalization", "svd"],
+      "description": "An eigenvector v of matrix A satisfies Av = λv — it is a non-zero vector that only gets scaled (not rotated) by the transformation. Eigenvectors for different eigenvalues are linearly independent. Geometrically, eigenvectors point in the directions that are preserved by the transformation. They are not unique — any scalar multiple of an eigenvector is also an eigenvector.",
+      "aliases": ["eigenvector", "eigenvectors", "Av = λv", "direction-invariant vector", "characteristic vector", "eigenspace", "eigenspace basis", "eigenvector equation", "Av = lambda v", "vectors that don't rotate", "axes of transformation", "principal directions"]
+    },
+    {
+      "id": "diagonalization",
+      "label": "Diagonalization",
+      "subject": "mathematics",
+      "tier": "advanced",
+      "prerequisites": ["eigenvalues", "eigenvectors", "linear_independence"],
+      "successors": ["svd"],
+      "description": "A matrix A is diagonalizable if A = PDP⁻¹ where D is diagonal (eigenvalues on diagonal) and P's columns are eigenvectors. Diagonalization simplifies powers of matrices: Aⁿ = PDⁿP⁻¹. A matrix is diagonalizable iff it has n linearly independent eigenvectors. Symmetric matrices are always diagonalizable with orthonormal eigenvectors (spectral theorem).",
+      "aliases": ["diagonalization", "diagonalizable", "A = PDP⁻¹", "eigendecomposition", "eigen decomposition", "diagonal matrix", "spectral decomposition", "spectral theorem", "PDP inverse", "matrix powers via eigenvalues", "similar matrices"]
     },
     {
       "id": "svd",
       "label": "Singular Value Decomposition",
-      "description": "Decomposes any matrix as A = U\u03a3V\u1d40 where U, V are orthogonal and \u03a3 is diagonal with non-negative entries.",
+      "subject": "mathematics",
       "tier": "expert",
-      "aliases": [
-        "SVD",
-        "singular value decomposition",
-        "singular values"
-      ],
-      "prerequisites": [
-        "diagonalization",
-        "orthogonality",
-        "least_squares",
-        "eigenvalues"
-      ]
+      "prerequisites": ["diagonalization", "orthogonality", "rank", "projections"],
+      "successors": [],
+      "description": "SVD decomposes any m×n matrix A = UΣVᵀ where U and V are orthonormal matrices and Σ is diagonal with non-negative singular values σ₁ ≥ σ₂ ≥ ... ≥ 0. SVD works for any matrix (not just square). Singular values are square roots of eigenvalues of AᵀA. Applications: PCA, compression, pseudoinverse, recommendation systems, low-rank approximation.",
+      "aliases": ["SVD", "singular value decomposition", "A = UΣV^T", "singular values", "σ", "U Σ V transpose", "left singular vectors", "right singular vectors", "low rank approximation", "matrix decomposition", "principal component analysis", "PCA", "pseudoinverse", "truncated SVD"]
+    },
+    {
+      "id": "linear_systems",
+      "label": "Systems of Linear Equations",
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["matrices", "linear_independence"],
+      "successors": ["rank", "inverse_matrix", "linear_transformations"],
+      "description": "A system Ax = b has: a unique solution (if A is invertible, rank = n), no solution (inconsistent, when b is not in the column space), or infinitely many solutions (when the null space is nontrivial). Gaussian elimination reduces the augmented matrix [A|b] to row echelon form. The solution set is the particular solution plus the null space.",
+      "aliases": ["linear system", "system of linear equations", "Ax = b", "Ax=b", "gaussian elimination", "row reduction", "augmented matrix", "row echelon form", "reduced row echelon form", "RREF", "consistent system", "inconsistent system", "back substitution", "solving linear equations"]
+    },
+    {
+      "id": "vector_spaces",
+      "label": "Vector Spaces",
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["vectors", "linear_combinations", "subspaces"],
+      "successors": ["basis", "linear_transformations", "orthogonality"],
+      "description": "A vector space is a set V with operations of addition and scalar multiplication satisfying 8 axioms (closure, associativity, commutativity, identity, inverse, scalar identity, distributivity). Examples: Rⁿ, polynomial spaces, function spaces, matrix spaces. The concept generalises vectors beyond arrows in space to any objects obeying these rules.",
+      "aliases": ["vector space", "vector space axioms", "abstract vector space", "R^n", "polynomial vector space", "function space", "abstract algebra vector space", "8 axioms", "closure", "field"]
     }
   ],
   "edges": [
-    {
-      "source": "vectors",
-      "target": "scalar_multiplication",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "vectors",
-      "target": "dot_product",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "vectors",
-      "target": "linear_combinations",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "vectors",
-      "target": "matrices",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "scalar_multiplication",
-      "target": "vector_spaces",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "scalar_multiplication",
-      "target": "linear_combinations",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "dot_product",
-      "target": "orthogonality",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "dot_product",
-      "target": "projections",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "dot_product",
-      "target": "matrix_multiplication",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "linear_combinations",
-      "target": "span",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "linear_combinations",
-      "target": "linear_independence",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "linear_independence",
-      "target": "basis",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "linear_independence",
-      "target": "rank",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "span",
-      "target": "basis",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "basis",
-      "target": "dimension",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "basis",
-      "target": "rank",
-      "relation": "leads_to",
-      "weight": 0.8
-    },
-    {
-      "source": "matrices",
-      "target": "matrix_multiplication",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "matrices",
-      "target": "determinant",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "matrices",
-      "target": "linear_transformations",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "matrices",
-      "target": "null_space",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "matrices",
-      "target": "rank",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "matrix_multiplication",
-      "target": "determinant",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "matrix_multiplication",
-      "target": "linear_transformations",
-      "relation": "part_of",
-      "weight": 1.0
-    },
-    {
-      "source": "determinant",
-      "target": "eigenvalues",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "rank",
-      "target": "null_space",
-      "relation": "leads_to",
-      "weight": 0.8
-    },
-    {
-      "source": "rank",
-      "target": "least_squares",
-      "relation": "requires",
-      "weight": 0.8
-    },
-    {
-      "source": "null_space",
-      "target": "eigenvectors",
-      "relation": "leads_to",
-      "weight": 0.9
-    },
-    {
-      "source": "linear_transformations",
-      "target": "eigenvalues",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "vector_spaces",
-      "target": "linear_independence",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "vector_spaces",
-      "target": "null_space",
-      "relation": "leads_to",
-      "weight": 0.9
-    },
-    {
-      "source": "eigenvalues",
-      "target": "eigenvectors",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "eigenvalues",
-      "target": "diagonalization",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "eigenvalues",
-      "target": "svd",
-      "relation": "leads_to",
-      "weight": 0.9
-    },
-    {
-      "source": "eigenvectors",
-      "target": "diagonalization",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "diagonalization",
-      "target": "svd",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "orthogonality",
-      "target": "projections",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "orthogonality",
-      "target": "svd",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "projections",
-      "target": "least_squares",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "least_squares",
-      "target": "svd",
-      "relation": "leads_to",
-      "weight": 0.8
-    }
+    {"source": "vectors", "target": "vector_operations", "weight": 1.0},
+    {"source": "vectors", "target": "linear_combinations", "weight": 0.9},
+    {"source": "vectors", "target": "dot_product", "weight": 0.9},
+    {"source": "vectors", "target": "matrices", "weight": 0.8},
+    {"source": "vector_operations", "target": "linear_combinations", "weight": 0.9},
+    {"source": "vector_operations", "target": "dot_product", "weight": 0.8},
+    {"source": "vector_operations", "target": "cross_product", "weight": 0.8},
+    {"source": "dot_product", "target": "orthogonality", "weight": 1.0},
+    {"source": "dot_product", "target": "projections", "weight": 0.9},
+    {"source": "dot_product", "target": "matrix_multiplication", "weight": 0.8},
+    {"source": "cross_product", "target": "determinant", "weight": 0.7},
+    {"source": "linear_combinations", "target": "linear_independence", "weight": 1.0},
+    {"source": "linear_combinations", "target": "subspaces", "weight": 0.9},
+    {"source": "linear_independence", "target": "basis", "weight": 1.0},
+    {"source": "linear_independence", "target": "rank", "weight": 0.9},
+    {"source": "linear_independence", "target": "determinant", "weight": 0.8},
+    {"source": "linear_independence", "target": "eigenvectors", "weight": 0.7},
+    {"source": "matrices", "target": "matrix_multiplication", "weight": 1.0},
+    {"source": "matrices", "target": "determinant", "weight": 0.9},
+    {"source": "matrices", "target": "linear_transformations", "weight": 0.9},
+    {"source": "matrices", "target": "linear_systems", "weight": 0.9},
+    {"source": "matrix_multiplication", "target": "determinant", "weight": 0.8},
+    {"source": "matrix_multiplication", "target": "linear_transformations", "weight": 0.9},
+    {"source": "matrix_multiplication", "target": "eigenvalues", "weight": 0.7},
+    {"source": "determinant", "target": "eigenvalues", "weight": 1.0},
+    {"source": "determinant", "target": "inverse_matrix", "weight": 1.0},
+    {"source": "inverse_matrix", "target": "linear_transformations", "weight": 0.8},
+    {"source": "inverse_matrix", "target": "eigenvalues", "weight": 0.7},
+    {"source": "linear_transformations", "target": "eigenvalues", "weight": 0.9},
+    {"source": "linear_transformations", "target": "eigenvectors", "weight": 0.8},
+    {"source": "linear_transformations", "target": "rank", "weight": 0.8},
+    {"source": "subspaces", "target": "basis", "weight": 0.9},
+    {"source": "subspaces", "target": "rank", "weight": 0.8},
+    {"source": "subspaces", "target": "orthogonality", "weight": 0.7},
+    {"source": "basis", "target": "rank", "weight": 0.8},
+    {"source": "basis", "target": "eigenvalues", "weight": 0.7},
+    {"source": "orthogonality", "target": "projections", "weight": 1.0},
+    {"source": "orthogonality", "target": "svd", "weight": 0.8},
+    {"source": "projections", "target": "svd", "weight": 0.8},
+    {"source": "rank", "target": "eigenvalues", "weight": 0.7},
+    {"source": "rank", "target": "svd", "weight": 0.8},
+    {"source": "eigenvalues", "target": "eigenvectors", "weight": 1.0},
+    {"source": "eigenvalues", "target": "diagonalization", "weight": 0.9},
+    {"source": "eigenvectors", "target": "diagonalization", "weight": 1.0},
+    {"source": "eigenvectors", "target": "svd", "weight": 0.8},
+    {"source": "diagonalization", "target": "svd", "weight": 0.9},
+    {"source": "linear_systems", "target": "rank", "weight": 0.8},
+    {"source": "linear_systems", "target": "inverse_matrix", "weight": 0.8},
+    {"source": "linear_systems", "target": "linear_transformations", "weight": 0.7},
+    {"source": "vector_spaces", "target": "basis", "weight": 0.9},
+    {"source": "vector_spaces", "target": "linear_transformations", "weight": 0.8},
+    {"source": "vector_spaces", "target": "orthogonality", "weight": 0.7}
   ]
 }
