@@ -90,7 +90,7 @@ app.add_middleware(
 )
 
 
-# ─── Auth ──────────────────────────────────────────────────────────────────────
+# ─── Auth ─────────────────────────────────────────────────────────────────────
 
 async def verify_firebase_token(request: Request) -> str:
     auth_header = request.headers.get("Authorization", "")
@@ -160,7 +160,7 @@ async def session_analyze(
     subject            = extraction["subject"]
     triples            = extraction["triples"]
     subject_confidence = extraction["subjectConfidence"]
-    simulation_hint    = extraction.get("simulationHint")  # optional hint from extractor
+    simulation_hint    = extraction.get("simulationHint")
     logger.info("Session %s: subject=%s triples=%d hint=%s",
                 session_id, subject, len(triples), simulation_hint)
 
@@ -199,26 +199,25 @@ async def session_analyze(
 
     # ── Layer 5: Simulation parameters ───────────────────────────────────────
     # Runs for every query that produced at least 1 SKG node.
-    # No longer gated on triple extractor flags — those were unreliable.
-    # The hint is resolved here: use extractor hint if present, else subject default.
-    # Non-blocking: if this fails the session still returns with simulatable=False.
+    # gemini_hint is resolved inside simulator.py via keyword override tables —
+    # we just pass the extractor's hint as a starting suggestion (or "generic").
     simulation_response = SimulationResponse(simulatable=False)
 
-    resolved_hint = simulation_hint or SIM_DEFAULT_HINTS.get(subject, "generic")
+    resolved_hint = simulation_hint or "generic"
 
     if len(skg_nx.nodes) >= 1:
         try:
             sim_data = await extract_simulation_params(
                 query=body.query,
                 subject=subject,
-                hint=resolved_hint,
+                tier=_tier_str(tier),
+                gemini_hint=resolved_hint,
                 triples=triples,
-                tier=tier,
             )
             if sim_data.get("simulatable"):
                 simulation_response = SimulationResponse(
                     simulatable=True,
-                    simulationHint=sim_data.get("hint", resolved_hint),
+                    simulationHint=sim_data.get("simulationHint", resolved_hint),
                     label=sim_data.get("label"),
                     studentParams=sim_data.get("studentParams", {}),
                     expertParams=sim_data.get("expertParams", {}),
@@ -399,6 +398,14 @@ async def global_error_handler(request: Request, exc: Exception):
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _tier_str(tier) -> str:
+    """Safely convert KnowledgeTier enum or string → plain 'T1'/'T2'/'T3'/'T4'."""
+    t = str(tier)
+    if "." in t:
+        t = t.split(".")[-1]
+    return t
+
 
 def _node_tier(skg_node: str, skg_to_dkg: dict, dkg_nx) -> Optional[str]:
     dkg_id = skg_to_dkg.get(skg_node)
