@@ -50,7 +50,7 @@ from services import (
     gemini_available,
 )
 
-from services.simulator import extract_simulation_params, SUBJECT_DEFAULT_HINT as SIM_DEFAULT_HINTS
+from services.simulator import extract_simulation_params
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
