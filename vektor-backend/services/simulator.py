@@ -1,15 +1,18 @@
 """
 VEKTOR Intelligence — Simulation Parameter Service
-Version: 2.0.0
-Session: 12
-Changes from v1.x:
-  - Complete Math keyword override table (30+ concepts)
-  - Complete Physics keyword override table (29 DKG nodes)
-  - T1/T3 split logic for ALL template families (not just graph_plot)
-  - Fallback chain for every subject/concept
-  - _force_params() replaces _force_differentiation() — general for all templates
-  - Named constants for all discrete enum parameters
-  - Full logging for all override decisions
+Version: 2.1.0
+Session: 13
+
+Changes from v2.0.0:
+  - FIX: Gemini simulatable=False no longer kills the pipeline when keyword
+    resolver already committed to a non-generic hint.  A safe default spec
+    is constructed instead (see _build_fallback_spec).
+  - FIX: _CORRECT_DERIVATIVE_PATTERNS extended to catch "derivative of x²
+    is x" style wrong-answer queries so T3 misconception path fires correctly.
+  - FIX: _apply_defaults now also called on the fallback spec so all required
+    params are always present.
+  - FIX: _sync_shape_params guard against missing keys in fallback spec.
+  - No breaking changes to public API.
 """
 
 import json
@@ -25,32 +28,32 @@ logger = logging.getLogger(__name__)
 
 # ─── Model ────────────────────────────────────────────────────────────────────
 _MODEL = "gemini-2.5-flash"
-_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "simulation_params.txt"
+_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "simulator_params.txt"
 _prompt_cache: Optional[str] = None
 
 # ─── func_type constants (graph_plot) ─────────────────────────────────────────
-FUNC_SINE = 0
-FUNC_CUBIC = 1
+FUNC_SINE     = 0
+FUNC_CUBIC    = 1
 FUNC_PARABOLA = 2
-FUNC_ABS = 3
+FUNC_ABS      = 3
 
 # ─── scenario constants (force) ───────────────────────────────────────────────
-SCENARIO_FREE_FALL = 0
+SCENARIO_FREE_FALL  = 0
 SCENARIO_PROJECTILE = 1
-SCENARIO_INCLINED = 2
-SCENARIO_COLLISION = 3
+SCENARIO_INCLINED   = 2
+SCENARIO_COLLISION  = 3
 
 # ─── wave_type constants (wave) ───────────────────────────────────────────────
-WAVE_TRANSVERSE = 0
+WAVE_TRANSVERSE  = 0
 WAVE_LONGITUDINAL = 1
-WAVE_STANDING = 2
+WAVE_STANDING    = 2
 
 # ─── molecule_type constants (molecule) ───────────────────────────────────────
-MOLECULE_WATER = 0
-MOLECULE_CO2 = 1
-MOLECULE_METHANE = 2
+MOLECULE_WATER      = 0
+MOLECULE_CO2        = 1
+MOLECULE_METHANE    = 2
 MOLECULE_GAS_PISTON = 3
-MOLECULE_CIRCUIT = 4
+MOLECULE_CIRCUIT    = 4
 MOLECULE_FIELD_LINES = 5
 
 # ─── HINT → template mapping ──────────────────────────────────────────────────
@@ -64,21 +67,21 @@ SIMULATABLE_HINTS = {
 }
 
 HINT_ALIASES = {
-    "geometry": "transform",
-    "molecular": "molecule",
-    "bond": "molecule",
-    "dna": "molecule",
-    "cell": "molecule",
-    "protein": "molecule",
-    "membrane": "molecule",
+    "geometry":      "transform",
+    "molecular":     "molecule",
+    "bond":          "molecule",
+    "dna":           "molecule",
+    "cell":          "molecule",
+    "protein":       "molecule",
+    "membrane":      "molecule",
     "graph_traversal": "sort",
-    "algorithm": "sort",
+    "algorithm":     "sort",
     "data_structure": "sort",
-    "neural_net": "generic",
-    "vector_field": "generic",
-    "reaction": "molecule",
-    "em_field": "generic",
-    "quantum": "generic",
+    "neural_net":    "generic",
+    "vector_field":  "generic",
+    "reaction":      "molecule",
+    "em_field":      "generic",
+    "quantum":       "generic",
 }
 
 # ─── MATH keyword → hint override table ───────────────────────────────────────
@@ -112,29 +115,23 @@ _MATH_HINT_KEYWORDS = [
 
 # ─── PHYSICS keyword → hint override table ────────────────────────────────────
 _PHYSICS_HINT_KEYWORDS = [
-    # wave family
     (["wave", "frequency", "amplitude", "wavelength", "interference",
       "superposition", "standing wave", "harmonic", "oscillat", "vibrat",
       "sound", "transverse", "longitudinal"], "wave"),
-    # orbital family
     (["orbit", "orbital", "kepler", "planetary", "planet", "elliptical orbit",
       "circular orbit", "perihelion", "aphelion", "satellite", "escape velocity",
       "gravitational field", "universal gravitation", "F = Gm"], "orbital"),
-    # force family
     (["newton", "force", "f = ma", "f=ma", "free fall", "projectile",
       "momentum", "impulse", "friction", "acceleration due to gravity",
       "heavier", "fall faster", "fall slower", "inertia", "g = 9.8", "9.8 m/s",
       "action reaction", "third law", "normal force"], "force"),
-    # molecule family — thermodynamics
     (["temperature", "thermal", "heat", "entropy", "thermodynamic", "carnot",
       "ideal gas", "pv = nrt", "pv=nrt", "boyle", "charles", "pressure volume",
       "kelvin", "absolute zero", "zeroth law", "first law thermo",
       "second law thermo", "irreversib"], "molecule"),
-    # molecule family — electromagnetism
     (["electric charge", "coulomb", "electric field", "field line",
       "voltage", "ohm", "circuit", "resistor", "v = ir", "v=ir",
       "current", "ampere", "parallel circuit", "series circuit"], "molecule"),
-    # generic family — angular momentum, maxwell, conservation laws
     (["angular momentum", "torque", "l = iω", "l=iω", "moment of inertia",
       "conservation of angular", "spinning"], "generic"),
     (["maxwell", "electromagnetic wave", "speed of light", "faraday",
@@ -183,6 +180,20 @@ _CORRECT_DERIVATIVE_PATTERNS = [
     ["derivative", "correct"],
 ]
 
+# ─── WRONG derivative patterns → T3 misconception ────────────────────────────
+# These look "almost right" but carry the classic off-by-factor-of-2 error.
+_WRONG_DERIVATIVE_PATTERNS = [
+    ["derivative of x", "is x"],       # "the derivative of x² is x"
+    ["derivative of x", "equals x"],
+    ["d/dx", "x^2", "= x"],
+    ["d/dx", "x²", "= x"],
+    ["d/dx x^2", "x"],
+    ["d/dx x²", "x"],
+    ["x square", "is x"],
+    ["x squared", "is x"],
+    ["power rule", "drop the exponent"],  # "just drop the exponent"
+]
+
 _CORRECT_INTEGRAL_PATTERNS = [
     ["integral of x^2", "x^3/3"],
     ["integral of x²", "x³/3"],
@@ -204,7 +215,7 @@ _CORRECT_EIGENVALUE_PATTERNS = [
 def _load_prompt() -> str:
     global _prompt_cache
     if _prompt_cache is None:
-        with open(_PROMPT_PATH) as f:
+        with open(_PROMPT_PATH, encoding = "utf-8") as f:
             _prompt_cache = f.read()
     return _prompt_cache
 
@@ -216,14 +227,12 @@ def _resolve_hint(query: str, subject: str, gemini_hint: Optional[str]) -> str:
     """
     q = query.lower()
 
-    # Math subject: check math keyword table
     if subject in ("mathematics", "math", "maths"):
         for keywords, hint in _MATH_HINT_KEYWORDS:
             if any(kw in q for kw in keywords):
                 logger.info(f"[HINT] Math keyword match → {hint}")
                 return hint
 
-    # Physics subject: check physics keyword table
     if subject in ("physics", "phys"):
         for keywords, hint in _PHYSICS_HINT_KEYWORDS:
             if any(kw in q for kw in keywords):
@@ -251,7 +260,6 @@ def _resolve_hint(query: str, subject: str, gemini_hint: Optional[str]) -> str:
     if any(kw in q for kw in graph_kw):
         return "graph_plot"
 
-    # Use Gemini's hint if it's valid
     if gemini_hint and gemini_hint in SIMULATABLE_HINTS:
         resolved = HINT_ALIASES.get(gemini_hint, gemini_hint)
         logger.info(f"[HINT] Using Gemini hint: {gemini_hint} → {resolved}")
@@ -282,22 +290,27 @@ def _is_correct_statement(query: str, patterns: list) -> bool:
     return False
 
 
+def _is_wrong_derivative(query: str) -> bool:
+    """
+    Detect the classic 'derivative of x² = x' misconception.
+    Returns True when the student drops the coefficient-2 from the power rule.
+    """
+    return _is_correct_statement(query, _WRONG_DERIVATIVE_PATTERNS)
+
+
+# ─── T1 param overrides ───────────────────────────────────────────────────────
+
 def _apply_graph_plot_t1(data: dict, query: str) -> dict:
-    """Force graph_plot params for T1 (correct derivative/integral knowledge)."""
     q = query.lower()
     sp = data["studentParams"]
     ep = data["expertParams"]
 
     if any(kw in q for kw in ["integral", "antiderivativ", "area under", "∫"]):
-        # T1 integral: show area on expert, not on student (visualisation)
-        sp.update({"show_integral": 0, "show_derivative": 0, "show_tangent": 0,
-                   "derivative_scale": 1.0})
-        ep.update({"show_integral": 1, "show_derivative": 0, "show_tangent": 0,
-                   "derivative_scale": 1.0})
+        sp.update({"show_integral": 0, "show_derivative": 0, "show_tangent": 0, "derivative_scale": 1.0})
+        ep.update({"show_integral": 1, "show_derivative": 0, "show_tangent": 0, "derivative_scale": 1.0})
         data["deltas"] = [{"key": "show_integral", "label": "Area visualisation",
                            "studentValue": "Not shown", "expertValue": "Shaded area shown"}]
     else:
-        # T1 derivative: show derivative overlay on expert only
         sp.update({"derivative_scale": 1.0, "show_derivative": 0, "show_tangent": 1})
         ep.update({"derivative_scale": 1.0, "show_derivative": 1, "show_tangent": 1})
         data["deltas"] = [{"key": "show_derivative", "label": "Derivative curve",
@@ -307,23 +320,61 @@ def _apply_graph_plot_t1(data: dict, query: str) -> dict:
     return data
 
 
+def _apply_graph_plot_t3_wrong_derivative(data: dict) -> dict:
+    """
+    T3 misconception: student thinks d/dx x² = x (missing the factor of 2).
+    student: derivative_scale=0.5 (slope is half of correct), show_derivative=0
+    expert:  derivative_scale=1.0 (correct slope),           show_derivative=1
+    """
+    sp = data["studentParams"]
+    ep = data["expertParams"]
+
+    sp.update({
+        "func_type":       FUNC_PARABOLA,
+        "derivative_scale": 0.5,   # represents "f'(x) = x" — half the correct slope
+        "show_derivative":  0,
+        "show_tangent":    1,
+        "show_integral":   0,
+    })
+    ep.update({
+        "func_type":       FUNC_PARABOLA,
+        "derivative_scale": 1.0,   # represents "f'(x) = 2x" — correct
+        "show_derivative":  1,
+        "show_tangent":    1,
+        "show_integral":   0,
+    })
+
+    data["deltas"] = [
+        {
+            "key":          "derivative_scale",
+            "label":        "Derivative slope at x = 1",
+            "studentValue": "1.0  (believes d/dx x² = x)",
+            "expertValue":  "2.0  (correct: d/dx x² = 2x)",
+        },
+        {
+            "key":          "show_derivative",
+            "label":        "Derivative curve f'(x)",
+            "studentValue": "Not shown",
+            "expertValue":  "f'(x) = 2x shown in cyan",
+        },
+    ]
+
+    logger.info("[T3_APPLY] graph_plot wrong-derivative misconception params applied")
+    return data
+
+
 def _apply_transform_t1(data: dict) -> dict:
-    """Force transform params for T1 (correct eigenvalue/eigenvector knowledge)."""
     for side in ("studentParams", "expertParams"):
-        data[side].update({
-            "show_eigenvectors": 1,
-            "eigen_rotation": 0.0,
-            "show_grid": 0,
-        })
-    data["expertParams"]["show_grid"] = 1  # show grid transformation on expert only
+        data[side].update({"show_eigenvectors": 1, "eigen_rotation": 0.0, "show_grid": 0})
+    data["expertParams"]["show_grid"] = 1
     data["deltas"] = [{"key": "show_grid", "label": "Grid transformation",
-                       "studentValue": "Not shown", "expertValue": "Shown — space stretches along eigenvector axes"}]
+                       "studentValue": "Not shown",
+                       "expertValue": "Shown — space stretches along eigenvector axes"}]
     logger.info("[T1_APPLY] transform T1 params applied")
     return data
 
 
 def _apply_wave_t1(data: dict) -> dict:
-    """Force wave params for T1 (correct wave knowledge)."""
     for side in ("studentParams", "expertParams"):
         data[side].update({"show_superposition": 0})
     data["expertParams"]["show_superposition"] = 1
@@ -334,19 +385,18 @@ def _apply_wave_t1(data: dict) -> dict:
 
 
 def _apply_orbital_t1(data: dict) -> dict:
-    """Force orbital params for T1 (correct Kepler knowledge)."""
     for side in ("studentParams", "expertParams"):
         data[side].update({"speed_model": 1, "show_focus": 1})
     data["expertParams"]["show_area_sweep"] = 1
     data["studentParams"]["show_area_sweep"] = 0
     data["deltas"] = [{"key": "show_area_sweep", "label": "Equal-area sweep",
-                       "studentValue": "Not visualised", "expertValue": "Equal areas shown (Kepler 2nd law)"}]
+                       "studentValue": "Not visualised",
+                       "expertValue": "Equal areas shown (Kepler 2nd law)"}]
     logger.info("[T1_APPLY] orbital T1 params applied")
     return data
 
 
 def _apply_force_t1(data: dict) -> dict:
-    """Force force params for T1 (correct Newton's laws knowledge)."""
     for side in ("studentParams", "expertParams"):
         data[side].update({"gravity_model": 1, "show_force_vectors": 0})
     data["expertParams"]["show_force_vectors"] = 1
@@ -356,51 +406,53 @@ def _apply_force_t1(data: dict) -> dict:
     return data
 
 
+# ─── Shape sync + defaults ────────────────────────────────────────────────────
+
 def _sync_shape_params(data: dict, hint: str) -> dict:
-    """
-    Ensure shape/type parameters are identical between student and expert params.
-    Only behavioral params (scale, speed_model, etc.) should differ.
-    """
+    """Ensure shape/type parameters are identical between student and expert params."""
     sp = data.get("studentParams", {})
     ep = data.get("expertParams", {})
 
     if hint == "graph_plot":
-        # Shape params that must always match
         for key in ("func_type", "amplitude", "frequency", "integral_from", "integral_to"):
             val = sp.get(key, ep.get(key))
-            sp[key] = val
-            ep[key] = val
-        # Apply func_type keyword override
+            if val is not None:
+                sp[key] = val
+                ep[key] = val
         q = data.get("_query", "")
-        sp["func_type"] = _resolve_func_type(q, int(sp.get("func_type", FUNC_PARABOLA)))
-        ep["func_type"] = sp["func_type"]
+        ft = _resolve_func_type(q, int(sp.get("func_type", FUNC_PARABOLA)))
+        sp["func_type"] = ft
+        ep["func_type"] = ft
 
     elif hint == "transform":
-        # Matrix entries must match
         for key in ("matrix_a", "matrix_b", "matrix_c", "matrix_d",
                     "eigenval1", "eigenval2", "eigenvec1_x", "eigenvec1_y",
                     "eigenvec2_x", "eigenvec2_y", "transform_amount"):
-            val = ep.get(key, sp.get(key))  # trust expert params for matrix
-            sp[key] = val
-            ep[key] = val
+            val = ep.get(key, sp.get(key))
+            if val is not None:
+                sp[key] = val
+                ep[key] = val
 
     elif hint == "wave":
         for key in ("wave_type", "wave_speed"):
             val = sp.get(key, ep.get(key))
-            sp[key] = val
-            ep[key] = val
+            if val is not None:
+                sp[key] = val
+                ep[key] = val
 
     elif hint == "orbital":
         for key in ("semi_major", "trail_length", "period_exponent"):
             val = ep.get(key, sp.get(key))
-            sp[key] = val
-            ep[key] = val
+            if val is not None:
+                sp[key] = val
+                ep[key] = val
 
     elif hint == "force":
         for key in ("scenario", "mass1", "mass2", "angle", "initial_velocity"):
             val = sp.get(key, ep.get(key))
-            sp[key] = val
-            ep[key] = val
+            if val is not None:
+                sp[key] = val
+                ep[key] = val
 
     data["studentParams"] = sp
     data["expertParams"] = ep
@@ -463,6 +515,57 @@ def _apply_defaults(data: dict, hint: str) -> dict:
     return data
 
 
+# ─── NEW: fallback spec builder ───────────────────────────────────────────────
+
+def _build_fallback_spec(hint: str, subject: str, tier: str, query: str) -> dict:
+    """
+    Build a minimal simulatable spec when Gemini returns simulatable=False
+    but the keyword resolver already committed to a real hint.
+
+    This guarantees the simulation pipeline never fails silently for concepts
+    that our keyword tables definitively recognise.
+    """
+    logger.warning(
+        "[SIM] Gemini returned simulatable=False but keyword resolver committed to "
+        f"hint={hint!r}. Building fallback spec."
+    )
+
+    # Human-readable label from the query (first 60 chars, title-cased)
+    raw_label = query.strip()[:60]
+    label = raw_label[0].upper() + raw_label[1:] if raw_label else f"{subject.title()} concept"
+
+    data = {
+        "simulatable":    True,
+        "simulationHint": hint,
+        "label":          label,
+        "studentParams":  {},
+        "expertParams":   {},
+        "deltas":         [],
+    }
+
+    # Store query for downstream resolvers
+    data["_query"] = query
+
+    # Fill defaults first so all required keys exist
+    data = _apply_defaults(data, hint)
+
+    # Then apply any concept-specific misconception overrides
+    if hint == "graph_plot":
+        if _is_wrong_derivative(query):
+            logger.info("[SIM] Fallback: wrong-derivative misconception detected → T3 override")
+            data = _apply_graph_plot_t3_wrong_derivative(data)
+        elif _is_correct_statement(query, _CORRECT_DERIVATIVE_PATTERNS):
+            logger.info("[SIM] Fallback: correct derivative detected → T1 override")
+            data = _apply_graph_plot_t1(data, query)
+        elif _is_correct_statement(query, _CORRECT_INTEGRAL_PATTERNS):
+            logger.info("[SIM] Fallback: correct integral detected → T1 override")
+            data = _apply_graph_plot_t1(data, query)
+
+    return data
+
+
+# ─── Main entry point ─────────────────────────────────────────────────────────
+
 async def extract_simulation_params(
     query: str,
     subject: str,
@@ -471,22 +574,32 @@ async def extract_simulation_params(
     triples: list,
 ) -> dict:
     """
-    Main entry point. Returns a complete SimulationResponse dict.
+    Main entry point.  Returns a complete SimulationResponse dict.
     All failures return simulatable=False — never crash the core pipeline.
+
+    Flow:
+      1. Keyword resolver commits to a hint  (never falls back to Gemini on mismatch)
+      2. Gemini is called for rich parameter extraction
+      3. If Gemini returns simulatable=False AND hint != 'generic' → use fallback spec
+      4. Shape sync + defaults + tier overrides applied
     """
     t0 = time.time()
+
+    NOT_SIMULATABLE = {
+        "simulatable": False, "simulationHint": None, "label": None,
+        "studentParams": {}, "expertParams": {}, "deltas": [],
+    }
 
     try:
         prompt_template = _load_prompt()
     except Exception as e:
         logger.error(f"[SIM] Prompt load failed: {e}")
-        return {"simulatable": False, "simulationHint": None, "label": None,
-                "studentParams": {}, "expertParams": {}, "deltas": []}
+        return NOT_SIMULATABLE
 
-    # Step 1: resolve hint via keyword override
+    # ── Step 1: keyword-driven hint resolution ─────────────────────────────────
     hint = _resolve_hint(query, subject, gemini_hint)
 
-    # Step 2: call Gemini for parameter extraction
+    # ── Step 2: call Gemini ────────────────────────────────────────────────────
     prompt = (
         f"{prompt_template}\n\n"
         f"QUERY: {query}\n"
@@ -510,7 +623,6 @@ async def extract_simulation_params(
                 ),
             )
             raw = response.text
-            # Strip markdown fences if present
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
@@ -523,28 +635,43 @@ async def extract_simulation_params(
             time.sleep(wait)
 
     if data is None:
-        logger.error("[SIM] All Gemini attempts failed — returning not simulatable")
-        return {"simulatable": False, "simulationHint": None, "label": None,
-                "studentParams": {}, "expertParams": {}, "deltas": []}
+        logger.error("[SIM] All Gemini attempts failed.")
+        # ── KEY FIX A: Gemini totally unreachable + keyword hint → fallback ───
+        if hint != "generic":
+            data = _build_fallback_spec(hint, subject, tier, query)
+        else:
+            return NOT_SIMULATABLE
 
+    # ── KEY FIX B: Gemini returned simulatable=False but we know the hint ──────
+    # When the keyword resolver already committed to a real (non-generic) hint,
+    # Gemini is wrong to say it's not simulatable — it just didn't recognise the
+    # short student query as a STEM statement.  Build a fallback instead.
     if not data.get("simulatable", False):
-        return data
+        if hint != "generic":
+            data = _build_fallback_spec(hint, subject, tier, query)
+        else:
+            logger.info("[SIM] hint=generic and simulatable=False → not simulatable")
+            return NOT_SIMULATABLE
 
-    # Step 3: inject query for downstream resolvers
+    # ── Step 3: inject query for downstream resolvers ──────────────────────────
     data["_query"] = query
 
-    # Step 4: override hint (our keyword override takes precedence)
+    # ── Step 4: override hint (keyword table wins over Gemini) ────────────────
     data["simulationHint"] = hint
 
-    # Step 5: sync shape params (type/matrix/etc must be identical between canvases)
+    # ── Step 5: sync shape params ──────────────────────────────────────────────
     data = _sync_shape_params(data, hint)
 
-    # Step 6: fill missing params with defaults
+    # ── Step 6: fill missing params with defaults ──────────────────────────────
     data = _apply_defaults(data, hint)
 
-    # Step 7: T1 overrides — if student stated something correctly,
-    #         don't show a misconception comparison. Show a visualisation lesson.
-    if tier == "T1":
+    # ── Step 7: T3 wrong-derivative check (must run before T1 — T3 takes priority
+    #    when the student's statement is identifiably wrong) ────────────────────
+    if hint == "graph_plot" and _is_wrong_derivative(query):
+        data = _apply_graph_plot_t3_wrong_derivative(data)
+
+    # ── Step 8: T1 overrides ──────────────────────────────────────────────────
+    elif tier == "T1":
         if hint == "graph_plot":
             data = _apply_graph_plot_t1(data, query)
         elif hint == "transform":
@@ -557,20 +684,22 @@ async def extract_simulation_params(
         elif hint == "force":
             data = _apply_force_t1(data)
 
-    # Step 8: T1 correct derivative/integral specific override
-    if hint == "graph_plot":
+    # ── Step 9: T1 correct derivative/integral specific override ──────────────
+    elif hint == "graph_plot":
         if _is_correct_statement(query, _CORRECT_DERIVATIVE_PATTERNS):
             data = _apply_graph_plot_t1(data, query)
         elif _is_correct_statement(query, _CORRECT_INTEGRAL_PATTERNS):
             data = _apply_graph_plot_t1(data, query)
 
-    # Step 9: Remove internal _query field before returning
+    # ── Step 10: cleanup ──────────────────────────────────────────────────────
     data.pop("_query", None)
 
-    # Ensure hint aliases are resolved in the final response
     if data.get("simulationHint") in HINT_ALIASES:
         data["simulationHint"] = HINT_ALIASES[data["simulationHint"]]
 
     elapsed = (time.time() - t0) * 1000
-    logger.info(f"[SIM] Complete in {elapsed:.0f}ms — hint={hint} tier={tier} simulatable={data.get('simulatable')}")
+    logger.info(
+        f"[SIM] Complete in {elapsed:.0f}ms — "
+        f"hint={hint} tier={tier} simulatable={data.get('simulatable')}"
+    )
     return data
