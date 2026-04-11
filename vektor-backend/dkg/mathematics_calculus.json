@@ -1,574 +1,283 @@
 {
   "subject": "mathematics",
   "subtopic": "calculus",
-  "version": "1.0.0",
-  "nodeCount": 20,
-  "edgeCount": 36,
+  "version": "2.0.0",
+  "publishedAt": "2026-03-31T00:00:00Z",
+  "researcherId": "system",
+  "nodeCount": 22,
   "nodes": [
     {
       "id": "functions",
       "label": "Functions",
-      "description": "A relation mapping each input to exactly one output. The fundamental building block of calculus.",
+      "subject": "mathematics",
       "tier": "foundational",
-      "aliases": [
-        "function",
-        "f(x)",
-        "mapping",
-        "real-valued function"
-      ],
-      "prerequisites": []
+      "prerequisites": [],
+      "successors": ["limits", "continuity", "derivatives"],
+      "description": "A function f: A → B maps each element of domain A to exactly one element of codomain B. Key concepts: domain, codomain, range, injectivity (one-to-one), surjectivity (onto), bijectivity. Function composition f∘g means apply g first then f. Inverse functions f⁻¹ reverse the mapping when f is bijective.",
+      "aliases": ["function", "functions", "f(x)", "mapping", "domain", "range", "codomain", "input output", "f of x", "function notation", "composite function", "inverse function", "f∘g", "composition", "f: A → B"]
     },
     {
       "id": "limits",
       "label": "Limits",
-      "description": "The value a function approaches as the input approaches a point. Foundation of all calculus definitions.",
+      "subject": "mathematics",
       "tier": "foundational",
-      "aliases": [
-        "limit",
-        "lim",
-        "limiting value",
-        "approaching"
-      ],
-      "prerequisites": [
-        "functions"
-      ]
+      "prerequisites": ["functions"],
+      "successors": ["continuity", "derivatives", "sequences"],
+      "description": "The limit lim_{x→a} f(x) = L means f(x) approaches L as x approaches a (not necessarily at x=a). Limits can exist even when f(a) is undefined. One-sided limits (left and right) must agree for the limit to exist. L'Hôpital's rule applies when limits give 0/0 or ∞/∞ form. Limits are the rigorous foundation of all of calculus.",
+      "aliases": ["limit", "limits", "lim", "lim x→a", "approaches", "tends to", "limit of function", "one-sided limit", "left limit", "right limit", "limit at infinity", "L'Hopital", "L'Hôpital's rule", "squeeze theorem", "limit laws", "0/0 form", "indeterminate form"]
     },
     {
       "id": "continuity",
       "label": "Continuity",
-      "description": "A function is continuous at a point if the limit equals the function value. No jumps or holes.",
+      "subject": "mathematics",
       "tier": "foundational",
-      "aliases": [
-        "continuous",
-        "continuous function",
-        "continuity at a point",
-        "discontinuity",
-        "discontinuous",
-        "not continuous",
-        "non-differentiable",
-        "sharp corner",
-        "sharp point",
-        "cusp",
-        "jump discontinuity",
-        "absolute value function",
-        "|x|"
-      ],
-      "prerequisites": [
-        "limits",
-        "functions"
-      ]
+      "prerequisites": ["limits", "functions"],
+      "successors": ["derivatives", "integration"],
+      "description": "A function is continuous at x=a if: f(a) is defined, lim_{x→a} f(x) exists, and lim_{x→a} f(x) = f(a). Discontinuities: removable (hole), jump, infinite. The intermediate value theorem states a continuous function on [a,b] takes all values between f(a) and f(b). Differentiability implies continuity — but not vice versa.",
+      "aliases": ["continuity", "continuous function", "discontinuity", "continuous at a point", "removable discontinuity", "jump discontinuity", "intermediate value theorem", "IVT", "piecewise continuous", "differentiable implies continuous", "f(a) = lim f(x)"]
     },
     {
       "id": "derivatives",
       "label": "Derivatives",
-      "description": "The instantaneous rate of change of a function. Defined as the limit of the difference quotient.",
+      "subject": "mathematics",
       "tier": "foundational",
-      "aliases": [
-        "derivative",
-        "differentiation",
-        "f prime",
-        "dy/dx",
-        "d/dx",
-        "gradient",
-        "differentiable",
-        "differentiability",
-        "not differentiable",
-        "non-differentiable",
-        "differentiable function",
-        "rate of change",
-        "slope of tangent",
-        "instantaneous rate"
-      ],
-      "prerequisites": [
-        "limits",
-        "functions",
-        "continuity"
-      ]
+      "prerequisites": ["limits", "functions", "continuity"],
+      "successors": ["differentiation_rules", "higher_derivatives", "mean_value_theorem"],
+      "description": "The derivative f'(x) = lim_{h→0} (f(x+h)−f(x))/h is the instantaneous rate of change — the slope of the tangent line at a point. Geometrically: the slope of the tangent line. Physically: instantaneous velocity. The derivative of x² is 2x (power rule). The derivative of sin(x) is cos(x). A function is differentiable at a point if the derivative exists there.",
+      "aliases": ["derivative", "derivatives", "differentiation", "f'(x)", "dy/dx", "df/dx", "instantaneous rate of change", "slope of tangent", "tangent line slope", "power rule derivative", "derivative of x squared is 2x", "d/dx", "Leibniz notation", "Newton notation", "prime notation", "rate of change"]
     },
     {
       "id": "differentiation_rules",
       "label": "Differentiation Rules",
-      "description": "Rules for computing derivatives: power rule, product rule, quotient rule, chain rule.",
-      "tier": "foundational",
-      "aliases": [
-        "power rule",
-        "product rule",
-        "quotient rule",
-        "chain rule",
-        "derivative rules",
-        "differentiating",
-        "how to differentiate",
-        "when derivative fails",
-        "derivative does not exist"
-      ],
-      "prerequisites": [
-        "derivatives"
-      ]
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["derivatives"],
+      "successors": ["higher_derivatives", "optimization", "related_rates"],
+      "description": "Key rules: Power rule d/dx(xⁿ) = nxⁿ⁻¹. Product rule (fg)' = f'g+fg'. Quotient rule (f/g)' = (f'g−fg')/g². Chain rule (f∘g)' = f'(g(x))·g'(x). Derivatives of standard functions: sin→cos, cos→−sin, eˣ→eˣ, ln(x)→1/x. The chain rule is the most commonly misapplied rule.",
+      "aliases": ["differentiation rules", "power rule", "product rule", "quotient rule", "chain rule", "d/dx(x^n) = nx^(n-1)", "derivative rules", "(fg)' = f'g + fg'", "chain rule derivative", "composite function derivative", "implicit differentiation", "derivative of sin", "derivative of cos", "derivative of e^x", "derivative of ln"]
     },
     {
-      "id": "critical_points",
-      "label": "Critical Points",
-      "description": "Points where f'(x) = 0 or is undefined. Candidates for local maxima, minima, or saddle points.",
+      "id": "higher_derivatives",
+      "label": "Higher Derivatives",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "critical point",
-        "stationary point",
-        "turning point",
-        "sharp point",
-        "corner point",
-        "cusp point",
-        "non-smooth point",
-        "point of non-differentiability",
-        "kink"
-      ],
-      "prerequisites": [
-        "derivatives",
-        "differentiation_rules"
-      ]
+      "prerequisites": ["differentiation_rules", "derivatives"],
+      "successors": ["optimization", "taylor_series"],
+      "description": "The second derivative f''(x) measures how the rate of change is itself changing — concavity. f'' > 0: concave up (holds water). f'' < 0: concave down (spills water). An inflection point is where concavity changes. The second derivative test for optimization: if f'(c)=0 and f''(c)>0 then c is a local minimum; f''(c)<0 means local maximum.",
+      "aliases": ["second derivative", "higher derivatives", "f''(x)", "d²y/dx²", "concavity", "concave up", "concave down", "inflection point", "second derivative test", "acceleration as second derivative", "nth derivative", "higher order derivative"]
     },
     {
       "id": "mean_value_theorem",
       "label": "Mean Value Theorem",
-      "description": "If f is continuous on [a,b] and differentiable on (a,b), then f'(c) = (f(b)-f(a))/(b-a) for some c.",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "MVT",
-        "mean value theorem",
-        "Lagrange mean value theorem"
-      ],
-      "prerequisites": [
-        "derivatives",
-        "continuity"
-      ]
+      "prerequisites": ["derivatives", "continuity"],
+      "successors": ["optimization", "integration"],
+      "description": "The Mean Value Theorem (MVT): if f is continuous on [a,b] and differentiable on (a,b), then there exists c in (a,b) with f'(c) = (f(b)−f(a))/(b−a). Geometrically: there is a point where the tangent line is parallel to the secant line. Rolle's theorem is the special case f(a)=f(b). MVT has profound implications for bounding function values.",
+      "aliases": ["mean value theorem", "MVT", "Rolle's theorem", "average rate of change equals instantaneous", "f'(c) = (f(b)-f(a))/(b-a)", "secant line parallel to tangent", "mean value theorem calculus"]
     },
     {
-      "id": "integrals",
-      "label": "Integrals",
-      "description": "The signed area under a curve. Defined as the limit of Riemann sums.",
+      "id": "optimization",
+      "label": "Optimization",
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["differentiation_rules", "higher_derivatives", "mean_value_theorem"],
+      "successors": ["multivariable_calculus"],
+      "description": "Finding extrema: set f'(x)=0 to find critical points. First derivative test: sign change of f' at c. Second derivative test: sign of f''(c). Global extrema on [a,b]: check critical points and endpoints. Optimization problems model real-world maxima/minima (maximize area, minimize cost). Lagrange multipliers handle constrained optimization.",
+      "aliases": ["optimization", "critical points", "local maximum", "local minimum", "global maximum", "global minimum", "f'(x) = 0", "extrema", "maxima minima", "first derivative test", "second derivative test", "Lagrange multipliers", "constrained optimization", "critical point analysis"]
+    },
+    {
+      "id": "related_rates",
+      "label": "Related Rates",
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["differentiation_rules", "derivatives"],
+      "successors": ["multivariable_calculus"],
+      "description": "Related rates problems use implicit differentiation with respect to time. If two quantities are related by an equation, differentiating both sides with respect to t gives a relationship between their rates of change. Key: identify all variables, write the relationship equation, differentiate both sides with respect to t using chain rule.",
+      "aliases": ["related rates", "rates of change", "implicit differentiation with time", "dy/dt", "dx/dt", "rate problems", "geometric rate of change", "related rate problems"]
+    },
+    {
+      "id": "integration",
+      "label": "Integration",
+      "subject": "mathematics",
       "tier": "foundational",
-      "aliases": [
-        "integral",
-        "integration",
-        "antiderivative",
-        "indefinite integral",
-        "definite integral"
-      ],
-      "prerequisites": [
-        "limits",
-        "functions"
-      ]
-    },
-    {
-      "id": "integration_techniques",
-      "label": "Integration Techniques",
-      "description": "Methods for computing integrals: substitution (u-sub), integration by parts, partial fractions.",
-      "tier": "intermediate",
-      "aliases": [
-        "u-substitution",
-        "u sub",
-        "integration by parts",
-        "partial fractions",
-        "trig substitution"
-      ],
-      "prerequisites": [
-        "integrals",
-        "differentiation_rules"
-      ]
+      "prerequisites": ["limits", "continuity"],
+      "successors": ["fundamental_theorem", "integration_techniques", "differential_equations"],
+      "description": "The definite integral ∫ₐᵇ f(x)dx is the signed area under the curve f(x) from a to b. It is defined as the limit of Riemann sums. The indefinite integral (antiderivative) ∫f(x)dx = F(x)+C where F'(x)=f(x). Integration is more complex than differentiation — not all functions have elementary antiderivatives.",
+      "aliases": ["integral", "integration", "∫", "∫f(x)dx", "definite integral", "indefinite integral", "antiderivative", "Riemann sum", "area under curve", "signed area", "F(x) + C", "∫ₐᵇ f(x)dx", "integrate", "finding antiderivative"]
     },
     {
       "id": "fundamental_theorem",
       "label": "Fundamental Theorem of Calculus",
-      "description": "Connects differentiation and integration: d/dx \u222b[a,x] f(t)dt = f(x). Antiderivatives evaluate definite integrals.",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "FTC",
-        "fundamental theorem",
-        "FTC part 1",
-        "FTC part 2"
-      ],
-      "prerequisites": [
-        "derivatives",
-        "integrals"
-      ]
+      "prerequisites": ["integration", "derivatives"],
+      "successors": ["integration_techniques"],
+      "description": "The FTC has two parts: (1) If F(x) = ∫ₐˣ f(t)dt then F'(x) = f(x) — differentiation and integration are inverse operations. (2) ∫ₐᵇ f(x)dx = F(b)−F(a) where F is any antiderivative of f. This connects the two main operations of calculus and allows definite integrals to be computed without Riemann sums.",
+      "aliases": ["fundamental theorem of calculus", "FTC", "F(b) - F(a)", "differentiation and integration are inverses", "part 1 FTC", "part 2 FTC", "Newton-Leibniz theorem", "antiderivative evaluated at bounds", "F'(x) = f(x)"]
+    },
+    {
+      "id": "integration_techniques",
+      "label": "Integration Techniques",
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["fundamental_theorem", "differentiation_rules"],
+      "successors": ["differential_equations", "sequences"],
+      "description": "Key techniques: U-substitution (reverse chain rule): ∫f(g(x))g'(x)dx. Integration by parts: ∫u dv = uv − ∫v du. Trigonometric substitution. Partial fractions for rational functions. These techniques reduce complex integrals to known forms. Choosing the right technique is an art that comes with practice.",
+      "aliases": ["integration techniques", "u substitution", "u-sub", "substitution method", "integration by parts", "∫u dv = uv - ∫v du", "trigonometric substitution", "partial fractions", "reverse chain rule", "trig substitution", "LIATE rule", "antiderivative techniques"]
     },
     {
       "id": "sequences",
-      "label": "Sequences",
-      "description": "An ordered list of numbers defined by a rule. Convergence defined via limits.",
+      "label": "Sequences and Series",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "sequence",
-        "convergent sequence",
-        "divergent sequence"
-      ],
-      "prerequisites": [
-        "limits",
-        "functions"
-      ]
-    },
-    {
-      "id": "series",
-      "label": "Series",
-      "description": "The sum of the terms of a sequence. Convergence tested by ratio test, integral test, comparison test.",
-      "tier": "intermediate",
-      "aliases": [
-        "infinite series",
-        "convergent series",
-        "divergent series",
-        "sum"
-      ],
-      "prerequisites": [
-        "sequences",
-        "limits"
-      ]
+      "prerequisites": ["limits", "integration_techniques"],
+      "successors": ["taylor_series", "differential_equations"],
+      "description": "A sequence {aₙ} converges if lim_{n→∞} aₙ exists. A series Σaₙ converges if the sequence of partial sums converges. Key convergence tests: ratio test, comparison test, integral test, alternating series test. A geometric series Σarⁿ converges to a/(1−r) for |r|<1. Absolute convergence implies convergence.",
+      "aliases": ["sequence", "series", "convergence", "divergence", "Σ", "summation", "infinite series", "geometric series", "partial sums", "ratio test", "comparison test", "integral test", "p-series", "harmonic series", "alternating series", "convergent series"]
     },
     {
       "id": "taylor_series",
       "label": "Taylor Series",
-      "description": "Power series representation of a function centred at a point: f(x) = \u03a3 f^(n)(a)/n! (x-a)^n.",
+      "subject": "mathematics",
       "tier": "advanced",
-      "aliases": [
-        "Taylor expansion",
-        "Maclaurin series",
-        "Maclaurin expansion",
-        "power series"
-      ],
-      "prerequisites": [
-        "series",
-        "derivatives",
-        "differentiation_rules"
-      ]
+      "prerequisites": ["sequences", "higher_derivatives", "integration_techniques"],
+      "successors": ["differential_equations"],
+      "description": "A Taylor series represents a function as an infinite sum of terms involving its derivatives at a point: f(x) = Σ f⁽ⁿ⁾(a)/n! · (x−a)ⁿ. Maclaurin series: expansion about a=0. Key series: eˣ = 1+x+x²/2!+..., sin(x) = x−x³/3!+..., cos(x) = 1−x²/2!+.... Taylor polynomials approximate functions locally. Radius of convergence determines where the series is valid.",
+      "aliases": ["Taylor series", "Maclaurin series", "Taylor expansion", "power series", "f(x) = Σ f^(n)(a)/n! (x-a)^n", "Taylor polynomial", "e^x expansion", "sin expansion", "cos expansion", "radius of convergence", "interval of convergence", "Taylor theorem", "truncated Taylor series"]
     },
     {
-      "id": "partial_derivatives",
-      "label": "Partial Derivatives",
-      "description": "The derivative of a multivariable function with respect to one variable, holding others constant.",
+      "id": "differential_equations",
+      "label": "Differential Equations",
+      "subject": "mathematics",
       "tier": "advanced",
-      "aliases": [
-        "partial derivative",
-        "partial differentiation",
-        "\u2202f/\u2202x"
-      ],
-      "prerequisites": [
-        "derivatives",
-        "multivariable_functions"
-      ]
+      "prerequisites": ["integration_techniques", "derivatives", "sequences"],
+      "successors": ["multivariable_calculus"],
+      "description": "An ODE involves a function and its derivatives: dy/dx = f(x,y). Separable ODEs: separate variables and integrate both sides. First-order linear ODEs: integrating factor method. Second-order linear ODEs (constant coefficients) have characteristic equations. Applications: population growth, cooling, oscillators. Initial conditions determine the specific solution.",
+      "aliases": ["differential equation", "ODE", "ordinary differential equation", "dy/dx = f(x,y)", "separable ODE", "first order ODE", "second order ODE", "initial value problem", "IVP", "integrating factor", "characteristic equation", "homogeneous ODE", "particular solution", "general solution", "exponential growth ODE"]
     },
     {
-      "id": "multivariable_functions",
-      "label": "Multivariable Functions",
-      "description": "Functions of two or more variables: f(x,y), f(x,y,z). The domain is a subset of \u211d\u207f.",
+      "id": "multivariable_calculus",
+      "label": "Multivariable Calculus",
+      "subject": "mathematics",
+      "tier": "advanced",
+      "prerequisites": ["differential_equations", "optimization", "related_rates"],
+      "successors": ["vector_calculus"],
+      "description": "Extension of calculus to functions of multiple variables f(x,y,z). Partial derivatives: ∂f/∂x treats other variables as constants. The gradient ∇f = (∂f/∂x, ∂f/∂y, ∂f/∂z) points in the direction of steepest ascent. Double and triple integrals. The Jacobian measures volume distortion under change of variables.",
+      "aliases": ["multivariable calculus", "partial derivative", "∂f/∂x", "gradient", "∇f", "del f", "gradient vector", "directional derivative", "double integral", "triple integral", "Jacobian", "multivariate calculus", "functions of several variables", "partial differentiation"]
+    },
+    {
+      "id": "vector_calculus",
+      "label": "Vector Calculus",
+      "subject": "mathematics",
+      "tier": "expert",
+      "prerequisites": ["multivariable_calculus"],
+      "successors": [],
+      "description": "Vector calculus extends calculus to vector fields. Divergence ∇·F measures sources/sinks of a field. Curl ∇×F measures rotation of a field. Line integrals ∫_C F·dr compute work done by a field along a curve. Surface integrals. Fundamental theorems: Green's theorem, Stokes' theorem, Divergence theorem — all generalize the FTC to higher dimensions.",
+      "aliases": ["vector calculus", "divergence", "curl", "∇·F", "∇×F", "line integral", "surface integral", "Stokes' theorem", "Green's theorem", "divergence theorem", "Gauss's theorem", "flux integral", "circulation", "del operator", "∇ operator", "vector field"]
+    },
+    {
+      "id": "epsilon_delta",
+      "label": "Epsilon-Delta Definition",
+      "subject": "mathematics",
+      "tier": "advanced",
+      "prerequisites": ["limits", "continuity"],
+      "successors": ["sequences"],
+      "description": "The rigorous ε-δ definition of limit: lim_{x→a} f(x)=L means for every ε>0 there exists δ>0 such that 0<|x−a|<δ implies |f(x)−L|<ε. This makes precise what 'arbitrarily close' means. Similarly, continuity at a: for every ε>0 there exists δ>0 such that |x−a|<δ implies |f(x)−f(a)|<ε.",
+      "aliases": ["epsilon delta", "ε-δ definition", "epsilon delta proof", "formal definition of limit", "rigorous limit", "ε δ", "for all epsilon there exists delta", "formal continuity", "analysis definition of limit"]
+    },
+    {
+      "id": "riemann_integral",
+      "label": "Riemann Integral",
+      "subject": "mathematics",
+      "tier": "advanced",
+      "prerequisites": ["limits", "integration"],
+      "successors": ["fundamental_theorem"],
+      "description": "The Riemann integral formalizes the area under a curve as a limit of Riemann sums: ∫ₐᵇ f(x)dx = lim_{n→∞} Σ f(xᵢ*)Δx. Left, right, and midpoint Riemann sums are approximations. A function is Riemann integrable on [a,b] if it is bounded and continuous almost everywhere. Upper and lower sums bound the integral.",
+      "aliases": ["Riemann integral", "Riemann sum", "left Riemann sum", "right Riemann sum", "midpoint rule", "Riemann approximation", "limit of Riemann sums", "area as limit of rectangles", "partition", "mesh size"]
+    },
+    {
+      "id": "implicit_differentiation",
+      "label": "Implicit Differentiation",
+      "subject": "mathematics",
       "tier": "intermediate",
-      "aliases": [
-        "multivariable",
-        "multivariate function",
-        "function of several variables",
-        "f(x,y)"
-      ],
-      "prerequisites": [
-        "functions",
-        "derivatives"
-      ]
+      "prerequisites": ["differentiation_rules", "functions"],
+      "successors": ["related_rates", "optimization"],
+      "description": "Implicit differentiation differentiates both sides of an equation with respect to x when y is implicitly defined (not solved for explicitly). Apply chain rule whenever differentiating y: d/dx(y²) = 2y·dy/dx. Used for curves like circles x²+y²=r² where solving for y requires two branches.",
+      "aliases": ["implicit differentiation", "implicit function", "d/dx(y^2) = 2y dy/dx", "differentiating implicitly", "chain rule on y", "implicit curve", "x² + y² = r²", "implicit derivative"]
     },
     {
-      "id": "gradient",
-      "label": "Gradient",
-      "description": "Vector of all partial derivatives \u2207f = (\u2202f/\u2202x\u2081, ..., \u2202f/\u2202x\u2099). Points in direction of steepest ascent.",
-      "tier": "advanced",
-      "aliases": [
-        "grad f",
-        "nabla f",
-        "\u2207f",
-        "del f"
-      ],
-      "prerequisites": [
-        "partial_derivatives",
-        "vectors"
-      ]
+      "id": "lhopitals_rule",
+      "label": "L'Hôpital's Rule",
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["limits", "differentiation_rules"],
+      "successors": ["sequences", "taylor_series"],
+      "description": "L'Hôpital's rule: if lim f(x)/g(x) gives 0/0 or ∞/∞ form, then lim f(x)/g(x) = lim f'(x)/g'(x), provided the latter limit exists. It can be applied repeatedly. Other indeterminate forms (0·∞, 1^∞, 0⁰, ∞⁰) can be converted to 0/0 or ∞/∞ form first.",
+      "aliases": ["L'Hopital's rule", "L'Hôpital's rule", "LHopital", "0/0 form", "infinity over infinity", "indeterminate form", "lim f/g = lim f'/g'", "differentiating numerator and denominator"]
     },
     {
-      "id": "odes",
-      "label": "Ordinary Differential Equations",
-      "description": "Equations relating a function and its derivatives: dy/dx = f(x,y). Solved by separation, integrating factor, etc.",
-      "tier": "advanced",
-      "aliases": [
-        "ODE",
-        "differential equation",
-        "DE",
-        "ordinary differential equation"
-      ],
-      "prerequisites": [
-        "derivatives",
-        "integration_techniques",
-        "fundamental_theorem"
-      ]
-    },
-    {
-      "id": "multivariable_integration",
-      "label": "Multivariable Integration",
-      "description": "Double and triple integrals over regions in \u211d\u00b2 and \u211d\u00b3. Computed by iterated integration.",
-      "tier": "advanced",
-      "aliases": [
-        "double integral",
-        "triple integral",
-        "multiple integral",
-        "iterated integral"
-      ],
-      "prerequisites": [
-        "integrals",
-        "multivariable_functions",
-        "integration_techniques"
-      ]
-    },
-    {
-      "id": "divergence_theorem",
-      "label": "Divergence Theorem",
-      "description": "Relates the flux of a vector field through a closed surface to the divergence inside the volume.",
-      "tier": "expert",
-      "aliases": [
-        "Gauss theorem",
-        "Gauss's theorem",
-        "divergence theorem"
-      ],
-      "prerequisites": [
-        "multivariable_integration",
-        "gradient",
-        "partial_derivatives"
-      ]
-    },
-    {
-      "id": "stokes_theorem",
-      "label": "Stokes' Theorem",
-      "description": "Relates the line integral of a vector field around a closed curve to the surface integral of its curl.",
-      "tier": "expert",
-      "aliases": [
-        "Stokes theorem",
-        "generalised Stokes",
-        "curl theorem"
-      ],
-      "prerequisites": [
-        "multivariable_integration",
-        "gradient",
-        "divergence_theorem"
-      ]
+      "id": "area_volume",
+      "label": "Area and Volume by Integration",
+      "subject": "mathematics",
+      "tier": "intermediate",
+      "prerequisites": ["fundamental_theorem", "integration_techniques"],
+      "successors": ["multivariable_calculus"],
+      "description": "Area between curves: ∫[f(x)−g(x)]dx. Volume of revolution by disk method: π∫[f(x)]²dx. Shell method: 2π∫x·f(x)dx. Arc length: ∫√(1+(f'(x))²)dx. Surface area of revolution: 2π∫f(x)√(1+(f'(x))²)dx. These applications connect definite integration to geometric measurement.",
+      "aliases": ["area under curve", "area between curves", "volume of revolution", "disk method", "washer method", "shell method", "arc length", "integration applications", "volume by integration", "2π∫", "solid of revolution"]
     }
   ],
   "edges": [
-    {
-      "source": "functions",
-      "target": "limits",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "functions",
-      "target": "integrals",
-      "relation": "leads_to",
-      "weight": 0.9
-    },
-    {
-      "source": "functions",
-      "target": "multivariable_functions",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "functions",
-      "target": "sequences",
-      "relation": "leads_to",
-      "weight": 0.8
-    },
-    {
-      "source": "limits",
-      "target": "continuity",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "limits",
-      "target": "derivatives",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "limits",
-      "target": "integrals",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "limits",
-      "target": "sequences",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "continuity",
-      "target": "derivatives",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "continuity",
-      "target": "mean_value_theorem",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "derivatives",
-      "target": "differentiation_rules",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "derivatives",
-      "target": "critical_points",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "derivatives",
-      "target": "fundamental_theorem",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "derivatives",
-      "target": "mean_value_theorem",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "derivatives",
-      "target": "taylor_series",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "derivatives",
-      "target": "partial_derivatives",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "derivatives",
-      "target": "odes",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "differentiation_rules",
-      "target": "integration_techniques",
-      "relation": "leads_to",
-      "weight": 0.9
-    },
-    {
-      "source": "differentiation_rules",
-      "target": "taylor_series",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "integrals",
-      "target": "integration_techniques",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "integrals",
-      "target": "fundamental_theorem",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "integrals",
-      "target": "multivariable_integration",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "integration_techniques",
-      "target": "odes",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "integration_techniques",
-      "target": "multivariable_integration",
-      "relation": "requires",
-      "weight": 0.9
-    },
-    {
-      "source": "fundamental_theorem",
-      "target": "integration_techniques",
-      "relation": "leads_to",
-      "weight": 0.9
-    },
-    {
-      "source": "fundamental_theorem",
-      "target": "odes",
-      "relation": "leads_to",
-      "weight": 0.8
-    },
-    {
-      "source": "sequences",
-      "target": "series",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "series",
-      "target": "taylor_series",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "multivariable_functions",
-      "target": "partial_derivatives",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "multivariable_functions",
-      "target": "multivariable_integration",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "partial_derivatives",
-      "target": "gradient",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "partial_derivatives",
-      "target": "divergence_theorem",
-      "relation": "requires",
-      "weight": 0.9
-    },
-    {
-      "source": "gradient",
-      "target": "divergence_theorem",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "gradient",
-      "target": "stokes_theorem",
-      "relation": "requires",
-      "weight": 1.0
-    },
-    {
-      "source": "multivariable_integration",
-      "target": "divergence_theorem",
-      "relation": "leads_to",
-      "weight": 1.0
-    },
-    {
-      "source": "divergence_theorem",
-      "target": "stokes_theorem",
-      "relation": "leads_to",
-      "weight": 1.0
-    }
+    {"source": "functions", "target": "limits", "weight": 1.0},
+    {"source": "functions", "target": "continuity", "weight": 0.9},
+    {"source": "functions", "target": "derivatives", "weight": 0.9},
+    {"source": "limits", "target": "continuity", "weight": 1.0},
+    {"source": "limits", "target": "derivatives", "weight": 1.0},
+    {"source": "limits", "target": "integration", "weight": 0.8},
+    {"source": "limits", "target": "sequences", "weight": 0.8},
+    {"source": "limits", "target": "epsilon_delta", "weight": 0.9},
+    {"source": "limits", "target": "riemann_integral", "weight": 0.8},
+    {"source": "limits", "target": "lhopitals_rule", "weight": 0.8},
+    {"source": "continuity", "target": "derivatives", "weight": 0.9},
+    {"source": "continuity", "target": "integration", "weight": 0.8},
+    {"source": "continuity", "target": "mean_value_theorem", "weight": 0.8},
+    {"source": "continuity", "target": "epsilon_delta", "weight": 0.8},
+    {"source": "derivatives", "target": "differentiation_rules", "weight": 1.0},
+    {"source": "derivatives", "target": "higher_derivatives", "weight": 0.9},
+    {"source": "derivatives", "target": "mean_value_theorem", "weight": 0.9},
+    {"source": "derivatives", "target": "fundamental_theorem", "weight": 0.9},
+    {"source": "derivatives", "target": "implicit_differentiation", "weight": 0.8},
+    {"source": "differentiation_rules", "target": "optimization", "weight": 0.9},
+    {"source": "differentiation_rules", "target": "higher_derivatives", "weight": 0.9},
+    {"source": "differentiation_rules", "target": "related_rates", "weight": 0.8},
+    {"source": "differentiation_rules", "target": "implicit_differentiation", "weight": 0.8},
+    {"source": "differentiation_rules", "target": "lhopitals_rule", "weight": 0.7},
+    {"source": "higher_derivatives", "target": "optimization", "weight": 0.9},
+    {"source": "higher_derivatives", "target": "taylor_series", "weight": 0.8},
+    {"source": "mean_value_theorem", "target": "optimization", "weight": 0.8},
+    {"source": "mean_value_theorem", "target": "integration", "weight": 0.7},
+    {"source": "optimization", "target": "multivariable_calculus", "weight": 0.7},
+    {"source": "related_rates", "target": "multivariable_calculus", "weight": 0.6},
+    {"source": "implicit_differentiation", "target": "related_rates", "weight": 0.9},
+    {"source": "implicit_differentiation", "target": "optimization", "weight": 0.7},
+    {"source": "integration", "target": "fundamental_theorem", "weight": 1.0},
+    {"source": "integration", "target": "integration_techniques", "weight": 0.9},
+    {"source": "integration", "target": "differential_equations", "weight": 0.8},
+    {"source": "integration", "target": "riemann_integral", "weight": 0.9},
+    {"source": "fundamental_theorem", "target": "integration_techniques", "weight": 0.9},
+    {"source": "fundamental_theorem", "target": "area_volume", "weight": 0.8},
+    {"source": "integration_techniques", "target": "differential_equations", "weight": 0.8},
+    {"source": "integration_techniques", "target": "sequences", "weight": 0.7},
+    {"source": "integration_techniques", "target": "area_volume", "weight": 0.8},
+    {"source": "sequences", "target": "taylor_series", "weight": 0.9},
+    {"source": "sequences", "target": "differential_equations", "weight": 0.6},
+    {"source": "taylor_series", "target": "differential_equations", "weight": 0.7},
+    {"source": "differential_equations", "target": "multivariable_calculus", "weight": 0.7},
+    {"source": "multivariable_calculus", "target": "vector_calculus", "weight": 1.0},
+    {"source": "epsilon_delta", "target": "sequences", "weight": 0.7},
+    {"source": "riemann_integral", "target": "fundamental_theorem", "weight": 1.0},
+    {"source": "lhopitals_rule", "target": "sequences", "weight": 0.7},
+    {"source": "lhopitals_rule", "target": "taylor_series", "weight": 0.6},
+    {"source": "area_volume", "target": "multivariable_calculus", "weight": 0.7}
   ]
 }
